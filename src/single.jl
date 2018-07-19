@@ -1,9 +1,16 @@
-export ADJGradCache
+export GradientCache, 
+       fromvector!,
+       tovector!, 
+       tovector
 
 # ////// METHODS THAT CUSTOM TYPES NEED TO OVERLOAD //////
 tovector!(out::Vector, ∇ᵤJ::Any, ∇ₜJ::Real, ∇ₛJ::Real) =
     throw(ArgumentError("not implemented"))
-fromvector(∇ᵤJ::Any, out::Vector) = 
+
+tovector(∇ᵤJ::Any, ∇ₜJ::Real, ∇ₛJ::Real) =
+    throw(ArgumentError("not implemented"))
+
+fromvector!(∇ᵤJ::Any, out::Vector) = 
     throw(ArgumentError("not implemented"))
 
 # associated helper function
@@ -13,52 +20,77 @@ _checksize(out, ∇ᵤJ) =
 
 
 # ////// ACTUAL TYPE FOR CALCULATIONS //////
-struct ADJGradCache{P, F, M, R, X} 
-       ϕ::P # nonlinear propagator
-       F::F # nonlinear equation right hand side
-     mon::M # monitor for forward solution
-      ψ⁺::R # linearised adjoint propagator
-    TMP1::X # temporary
-    TMP2::X # temporary
-    TMP3::X # temporary
-    TMP4::X # temporary
+struct GradientCache{P, F, D, R, X} 
+      ϕ::P # nonlinear propagator
+  dϕdt!::F # nonlinear equation right hand side
+   ddx!::D # x derivative
+     ψ⁺::R # linearised adjoint propagator
+    TMP::NTuple{5, X} # temporaries
 end
 
-# constructor. Pass U as extra parameter for creating the temporaries
-ADJGradCache(ϕ, F, mon, ψ⁺, U) = 
-    ADJGradCache(ϕ, F, mon, ψ⁺, [similar(U) for i=1:4]...) 
+# Constructor. Pass U as extra parameter for creating the temporaries
+function GradientCache(ϕ, dϕdt!, ddx!, ψ⁺, U)
 
-function (agc::ADJGradCache)(grad::AbstractVector, x::AbstractVector)
+    # construct callable object
+    cache = GradientCache(ϕ, dϕdt!, ddx!, ψ⁺, ntuple(i->similar(U), 5))
+
+    # preallocate buffer, with space for cost function and gradient
+    buffer = (zeros(1), tovector(U, 0, 0))
+
+    # use Optim.jl trick for shared calculations
+    last_x = similar(buffer[2])
+
+    # callables
+    function f(x)
+        x != last_x && (cache(x, buffer); last_x .= x)
+        return buffer[1][1]
+    end
+
+    function g!(grad, x)
+        x != last_x && (cache(x, buffer); last_x .= x)
+        grad .= buffer[2]
+        return nothing
+    end
+
+    # return the two closures
+    return f, g!
+end
+
+function (agc::GradientCache)(x::AbstractVector, buffer)
     # ~~~ UNPACK LOCAL VARIABLES AND OBTAIN ALIASES ~~~
-    U₀, T, s = fromvector!(agc.TMP1, x)
-    χ        = agc.TMP2
-    ∇ᵤJ      = agc.TMP3
-    dU₁dt    = agc.TMP4
+    U₀, T, s = fromvector!(agc.TMP[1], x)
+    χ, ∇ᵤJ, Uₜ, dUₜdt = agc.TMP[2:end]
     ϕ        = agc.ϕ
-    F        = agc.F
+    dϕdt!    = agc.dϕdt!
+    ddx!     = agc.ddx!
     ψ⁺       = agc.ψ⁺
-    mon      = agc.mon
     
     # ~~~ GRADIENT WRT TO INITIAL CONDITION ~~~
-    # obtain end point
+    # obtain shifted end point
     Uₜ .= U₀
-    ϕ(Uₜ, (0, T), reset!(mon))
+    shift!(ϕ(Uₜ, (0, T)), s)
+
+    # obtain end point acceleration
+    dϕdt!(T, Uₜ, dUₜdt)
 
     # obtain end point error
     χ .= Uₜ .- U₀
 
-    # obtain end point acceleration
-    F(T, Uₜ, dUₜdt)
+    # store cost to buffer
+    buffer[1][1] = 0.5*dot(χ, χ)
 
     # calculate gradient WRT to period
-    ∇ₜJ = dot(χ, shift!(dU₁dt, s))
+    ∇ₜJ = dot(χ, dUₜdt)
 
     # calculate gradient WRT to shift
-    ∇ₛJ = dot(χ, ddx!(U₁))
+    ∇ₛJ = dot(χ, ddx!(Uₜ))
 
-    # reverse shift, backward integrate, subtract to obtain gradient.
-    ∇ᵤJ .= ψ⁺(shift!(χ, -s), (T, 0)) .- χ
+    # copy, reverse shift, backward integrate, subtract to obtain gradient.
+    Uₜ .= χ
+    ∇ᵤJ .= ψ⁺(shift!(Uₜ, -s), (T, 0)) .- χ
 
     # now obtain the other two gradients
-    return tovector!(grad, ∇ᵤJ, ∇ₜJ, ∇ₛJ)
+    tovector!(buffer[2], ∇ᵤJ, ∇ₜJ, ∇ₛJ)
+
+    return nothing
 end
