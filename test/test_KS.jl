@@ -1,7 +1,19 @@
 using Base.Test
 using Flows, KS, asis
 
-@testset "test f and g!                          " begin
+@testset "utils                                  " begin
+    @test asis._next_k(1, 3) == 2
+    @test asis._next_k(2, 3) == 3
+    @test asis._next_k(3, 3) == 1
+    @test asis._prev_k(1, 3) == 3
+    @test asis._prev_k(2, 3) == 1
+    @test asis._prev_k(3, 3) == 2
+    
+    @test asis._next_k(1, 1) == 1
+    @test asis._prev_k(1, 1) == 1
+end
+
+@testset "test f and g! for single shooting      " begin
     # parameters
     ν        = (2π/30)^2
     Δt       = 1e-2*ν
@@ -23,8 +35,8 @@ using Flows, KS, asis
     # monitor to store the forward solution
     sol = Monitor(FTField(n, ISODD), copy)
 
-    # land on attractor
-    U₀ = ϕ(FTField(n, ISODD, k->exp(2π*im*rand())/k), (0, 100*ν))
+    # land on attractor and construct tuple of initial conditions
+    U₀ = (ϕ(FTField(n, ISODD, k->exp(2π*im*rand())/k), (0, 100*ν)), )
 
     # rhs
     L⁺ = LinearisedEquation(n, ν, ISODD, KS.AdjointMode(), sol)
