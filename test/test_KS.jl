@@ -125,14 +125,12 @@ end
     # monitor to store the forward solution
     sol = Monitor(FTField(n, ISODD), copy)
 
-    # land on attractor and construct tuple of initial conditions
-    TMP = ϕ(FTField(n, ISODD, k->exp(2π*im*rand())/k), (0, 100*ν))
+    # land on attractor
+    U₀ = ϕ(FTField(n, ISODD, k->exp(2π*im*rand())/k), (0, 100*ν))
 
-    U₀ = (TMP, 
-          ϕ(copy(TMP), (0, T/N)),
-          ϕ(copy(TMP), (0, T/N)),
-          ϕ(copy(TMP), (0, T/N)),
-          ϕ(copy(TMP), (0, T/N)))
+    # construct tuple of initial conditions, noting that we do not want 
+    # to have a continuous trajectory, but rather several chunks.
+    V = ntuple(i->ϕ(copy(U₀), (0, i*T/N + rand()*ν)), N);
 
     # rhs
     L⁺ = LinearisedEquation(n, ν, ISODD, KS.AdjointMode(), sol)
@@ -142,10 +140,10 @@ end
                    Scheme(rkmethod, FTField(n, ISODD)), TimeStepConstant(Δt))
 
     # build cache for gradient evaluation
-    f, g! = GradientCache((U, span)->ϕ(U, span, reset!(sol)), F, KS.ddx!, ψ⁺, U₀)
+    f, g! = GradientCache((U, span)->ϕ(U, span, reset!(sol)), F, KS.ddx!, ψ⁺, V)
 
     # initial condition
-    x0 = tovector(U₀, T, 0.1)
+    x0 = tovector(V, T, 0.1)
 
     # //// TEST GRADIENT WITH RESPECT TO THE FIRST FIVE COMPONENTS OF EVERY SHOOTING STAGE ////
     for skip in [0, 40, 80, 120, 160]
@@ -179,7 +177,7 @@ end
     grad_exact = similar(x0)
     g!(grad_exact, x0)
 
-    @test abs(grad_exact[end-1] - grad_FD)/abs(grad_FD) < 3e-6
+    @test abs(grad_exact[end-1] - grad_FD)/abs(grad_FD) < 1e-5
 
     # //// TEST GRADIENT WITH RESPECT TO SHIFT ////
     f0 = f(x0)
@@ -194,5 +192,5 @@ end
     grad_exact = similar(x0)
     g!(grad_exact, x0)
 
-    @test abs(grad_exact[end] - grad_FD)/abs(grad_FD) < 3e-6
+    @test abs(grad_exact[end] - grad_FD)/abs(grad_FD) < 4e-6
 end
