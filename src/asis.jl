@@ -106,7 +106,7 @@ function (agc::GradientCache{N})(x::AbstractVector, buffer) where {N}
         χ[k] .= Uₜ .- U₀[_next_k(k, N)]
 
         # now update gradient wrt to T
-        ∇ₜJ += dot(χ[k], dUₜdt)
+        ∇ₜJ += dot(χ[k], dUₜdt)/N
 
         # and update gradient WRT to shift
         if k == N
