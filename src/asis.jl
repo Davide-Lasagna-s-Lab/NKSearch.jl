@@ -1,6 +1,8 @@
 module asis
 
-using Flows: AbstractStageCache
+using Flows: AbstractStageCache, reset!
+using Iterators
+
 export GradientCache, 
        fromvector!,
        tovector!, 
