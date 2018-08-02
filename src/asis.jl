@@ -1,5 +1,6 @@
 module asis
 
+using Flows: AbstractStageCache
 export GradientCache, 
        fromvector!,
        tovector!, 
@@ -22,22 +23,28 @@ _checksize(out::Vector, ∇ᵤJ::NTuple{N, X}) where {N, X} =
 
 
 # ////// ACTUAL TYPE FOR CALCULATIONS //////
-struct GradientCache{N, P, F, D, R, X} 
       ϕ::P # nonlinear propagator
   dϕdt!::F # nonlinear equation right hand side
    ddx!::D # x derivative
      ψ⁺::R # linearised adjoint propagator
+mutable struct GradientCache{N, P, F, D, R, X, CS} 
+ caches::CS # a vector of stage caches filled by the nonlinear operator
     TMP::Tuple{NTuple{N, X}, NTuple{N, X}, NTuple{N, X}, X, X} # temporaries
 end
 
 # Constructor. Pass U as extra parameter for creating the temporaries
-function GradientCache(ϕ, dϕdt!, ddx!, ψ⁺, U::NTuple{N, X}) where {N, X}
+function GradientCache(ϕ, dϕdt!, ddx!, ψ⁺, 
+                       U::NTuple{N, X}, 
+                       caches::NTuple{N, C}, 
+                       K::Int=N) where {N, X, C<:AbstractStageCache}
+
 
     # construct callable object
     cache = GradientCache(ϕ, 
                           dϕdt!, 
                           ddx!, 
                           ψ⁺, 
+                          caches,
                           (deepcopy.(U), 
                            deepcopy.(U), 
                            deepcopy.(U),
@@ -97,7 +104,7 @@ function (agc::GradientCache{N})(x::AbstractVector, buffer) where {N}
     for k = 1:N
         # obtain (optionally) shifted end point
         Uₜ .= U₀[k]
-        shift!(ϕ(Uₜ, (0, T/N)), sₖ[k])
+        shift!(ϕ(Uₜ, (0, T/N), reset!(caches[k])), sₖ[k])
 
         # obtain end point acceleration
         dϕdt!(T/N, Uₜ, dUₜdt)
@@ -118,9 +125,8 @@ function (agc::GradientCache{N})(x::AbstractVector, buffer) where {N}
 
         # calculate gradient wrt to initial conditions, aliasing over Uₜ
         Uₜ .= χ[k]
-        ∇ᵤJ[k] .= ψ⁺(shift!(Uₜ, -sₖ[k]), (T/N, 0)) .- χ[_prev_k(k, N)]
+        ∇ᵤJ[k] .= ψ⁺(shift!(Uₜ, -sₖ[k]), caches[k]) .- χ[_prev_k(k, N)]
     end
-
 
     # now obtain the other two gradients
     tovector!(buffer[2], ∇ᵤJ, ∇ₜJ, ∇ₛJ)
