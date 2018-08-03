@@ -18,7 +18,6 @@ end
     ν        = (2π/30)^2
     Δt       = 1e-2*ν
     T        = 10*ν
-    rkmethod = :CB3e_3R2R
     ISODD    = false
     n        = 20
 
@@ -29,24 +28,24 @@ end
     F = ForwardEquation(n, ν, ISODD)
 
     # integrator
-    ϕ = integrator(splitexim(F)..., 
-                   Scheme(rkmethod, FTField(n, ISODD)), TimeStepConstant(Δt))
+    ϕ = flow(splitexim(F)..., 
+                   CB3R2R3e(FTField(n, ISODD), :NL), TimeStepConstant(Δt))
 
-    # monitor to store the forward solution
-    sol = Monitor(FTField(n, ISODD), copy)
+    # define the stage cache
+    cache = (RAMStageCache(4, FTField(n, ISODD)), )
 
     # land on attractor and construct tuple of initial conditions
     U₀ = (ϕ(FTField(n, ISODD, k->exp(2π*im*rand())/k), (0, 100*ν)), )
 
     # rhs
-    L⁺ = LinearisedEquation(n, ν, ISODD, KS.AdjointMode(), sol)
+    L⁺ = LinearisedEquation(n, ν, ISODD, KS.AdjointMode())
 
     # integrators
-    ψ⁺ = integrator(splitexim(L⁺)..., 
-                   Scheme(rkmethod, FTField(n, ISODD)), TimeStepConstant(Δt))
+    ψ⁺ = flow(splitexim(L⁺)..., 
+                   CB3R2R3e(FTField(n, ISODD), :ADJ), TimeStepFromCache())
 
     # build cache for gradient evaluation
-    f, g! = GradientCache((U, span)->ϕ(U, span, reset!(sol)), F, KS.ddx!, ψ⁺, U₀)
+    f, g! = GradientCache(ϕ, F, KS.ddx!, ψ⁺, U₀, cache)
 
     # initial condition
     x0 = tovector(U₀, T, 0.1)
@@ -101,13 +100,12 @@ end
     @test abs(grad_exact[end] - grad_FD)/abs(grad_FD) < 3e-6
 end
 
-
-@testset "test f and g! for multiple shooting    " begin
+# for some reason julia crashes if this is a test set
+# @testset "test f and g! for multiple shooting    " begin
     # parameters
     ν        = (2π/30)^2
     Δt       = 1e-2*ν
     T        = 10*ν
-    rkmethod = :CB3e_3R2R
     ISODD    = false
     n        = 20
     N        =  5
@@ -119,11 +117,11 @@ end
     F = ForwardEquation(n, ν, ISODD)
 
     # integrator
-    ϕ = integrator(splitexim(F)..., 
-                   Scheme(rkmethod, FTField(n, ISODD)), TimeStepConstant(Δt))
+    ϕ = flow(splitexim(F)..., 
+             CB3R2R3e(FTField(n, ISODD), :NL), TimeStepConstant(Δt))
 
-    # monitor to store the forward solution
-    sol = Monitor(FTField(n, ISODD), copy)
+    # define the stage cache
+    cache = ntuple(i->RAMStageCache(4, FTField(n, ISODD)), N)
 
     # land on attractor
     U₀ = ϕ(FTField(n, ISODD, k->exp(2π*im*rand())/k), (0, 100*ν))
@@ -133,15 +131,15 @@ end
     V = ntuple(i->ϕ(copy(U₀), (0, i*T/N + rand()*ν)), N);
 
     # rhs
-    L⁺ = LinearisedEquation(n, ν, ISODD, KS.AdjointMode(), sol)
+    L⁺ = LinearisedEquation(n, ν, ISODD, KS.AdjointMode())
 
     # integrators
-    ψ⁺ = integrator(splitexim(L⁺)..., 
-                   Scheme(rkmethod, FTField(n, ISODD)), TimeStepConstant(Δt))
+    ψ⁺ = flow(splitexim(L⁺)..., 
+              CB3R2R3e(FTField(n, ISODD), :ADJ), TimeStepFromCache())
 
     # build cache for gradient evaluation
-    f, g! = GradientCache((U, span)->ϕ(U, span, reset!(sol)), F, KS.ddx!, ψ⁺, V)
-
+    f, g! = GradientCache(ϕ, F, KS.ddx!, ψ⁺, V, cache);
+    
     # initial condition
     x0 = tovector(V, T, 0.1)
 
@@ -193,4 +191,4 @@ end
     g!(grad_exact, x0)
 
     @test abs(grad_exact[end] - grad_FD)/abs(grad_FD) < 4e-6
-end
+# end

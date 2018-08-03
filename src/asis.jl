@@ -25,13 +25,14 @@ _checksize(out::Vector, ∇ᵤJ::NTuple{N, X}) where {N, X} =
 
 
 # ////// ACTUAL TYPE FOR CALCULATIONS //////
-      ϕ::P # nonlinear propagator
-  dϕdt!::F # nonlinear equation right hand side
-   ddx!::D # x derivative
-     ψ⁺::R # linearised adjoint propagator
 mutable struct GradientCache{N, P, F, D, R, X, CS} 
+      ϕ::P  # nonlinear propagator
+  dϕdt!::F  # nonlinear equation right hand side
+   ddx!::D  # x derivative
+     ψ⁺::R  # linearised adjoint propagator
  caches::CS # a vector of stage caches filled by the nonlinear operator
     TMP::Tuple{NTuple{N, X}, NTuple{N, X}, NTuple{N, X}, X, X} # temporaries
+      K::Int
 end
 
 # Constructor. Pass U as extra parameter for creating the temporaries
@@ -51,8 +52,7 @@ function GradientCache(ϕ, dϕdt!, ddx!, ψ⁺,
                            deepcopy.(U), 
                            deepcopy.(U),
                            deepcopy(U[1]), 
-                           deepcopy(U[1])))
-
+                           deepcopy(U[1])), K)
 
     # preallocate buffer, with space for cost function and gradient
     buffer = (zeros(1), tovector(U, 0, 0))
@@ -88,22 +88,29 @@ function (agc::GradientCache{N})(x::AbstractVector, buffer) where {N}
     dϕdt!    = agc.dϕdt!
     ddx!     = agc.ddx!
     ψ⁺       = agc.ψ⁺
+    caches   = agc.caches
 
     # shifts for every segment
     sₖ = ntuple(i->(i == N ? s : zero(s)), N)
 
-    # init cost
+    # init data 
     buffer[1][1] = 0.0
     ∇ₜJ          = 0.0
     ∇ₛJ          = 0.0
+
+    # set to zero gradients that will not be calculated
+    for el in ∇ᵤJ; el .= 0; end
+    for el in χ;   el .= 0; end
     
     # ~~~ GRADIENT WRT TO INITIAL CONDITION ~~~
 
     # this loop is not thread safe, because ϕ writes to the 
-    # monitor for ψ⁺ to read when integrating backwards. One 
-    # should create copies of ϕ, making sure copies of the 
-    # monitor are done too. 
-    for k = 1:N
+    # stage cache for ψ⁺ to read when integrating backwards. 
+    # One should create copies of ϕ, making sure copies of 
+    # the stage cache are done too. 
+    ks = unique(collect(chain(1:agc.K, (N-agc.K+1):N)))
+
+    for k in ks
         # obtain (optionally) shifted end point
         Uₜ .= U₀[k]
         shift!(ϕ(Uₜ, (0, T/N), reset!(caches[k])), sₖ[k])
@@ -121,7 +128,9 @@ function (agc::GradientCache{N})(x::AbstractVector, buffer) where {N}
         if k == N
             ∇ₛJ += dot(χ[k], ddx!(Uₜ))
         end
-
+    end
+       
+    for k in ks
         # update cost
         buffer[1][1] += 0.5*dot(χ[k], χ[k])
 
