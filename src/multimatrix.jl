@@ -1,6 +1,7 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
+import Flows
 
 # ~~~ Matrix Type ~~~
 mutable struct MMatrix{X, N, GType, LType, SType, dGType, dSType, C}
@@ -77,7 +78,7 @@ function update!(A::MMatrix{X, N},
         xT[i] .= x0[i]
         Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
         # do not care about the right time span for autonomous systems
-        G(xT[i], (0, Ti), caches[i])
+        G(xT[i], (0, Ti), Flows.reset!(caches[i]))
         # last one get shifted
         i == N && S(xT[i], s)
     end
