@@ -16,6 +16,7 @@ export Options
     x_tol::Float64      = 1e-10  # tolerance on initial state correction
     e_tol::Float64      = 1e-10  # tolerance on initial state correction
     ls_maxiter::Int     = 10     # maximum number of line search iterations 
+    ls_rho::Float64     = 0.5    # line search step reduction factor
     gmres_maxiter::Int  = 10     # maximum number of GMRES iterations
     gmres_verbose::Bool = true   # print GMRES iteration status
     gmres_rtol::Float64 = 1e-3   # GMRES relative stopping tolerance
