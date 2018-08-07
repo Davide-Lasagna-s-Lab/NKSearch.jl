@@ -1,6 +1,7 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
+import GMRES
 
 export search!
 
@@ -15,6 +16,20 @@ function search!(G, L, S, dG, dS,
     b   = similar(z0)                           # right hand side
     tmp = similar(z0[1])                        # temporary
     A   = MMatrix(G, L, S, dG, dS, caches, z0)  # Newton update equation matrix operator
+
+    # calculate initial error
+    e_norm = e_norm_λ(G, S, z0, z0, 0.0, tmp)
+
+    # display status if verbose
+    opts.verbose && display_status(opts.io,    # input/output channel
+                                   0,          # iteration number
+                                   0,          # total norm of correction
+                                   0,          # period correction
+                                   0,          # shift correction
+                                   sum(z0.T),  # current period
+                                   z0.s,       # current shift
+                                   e_norm,     # error norm after step
+                                   0.0)        # step length
 
     # newton iterations loop
     for iter = 1:opts.maxiter
@@ -35,15 +50,15 @@ function search!(G, L, S, dG, dS,
         δx_norm = sum(norm(b[i])^2 for i = 1:N)
 
         # display status if verbose
-        opts.verbose && display_status(opts.io, # input/output channel
-                                       iter,    # iteration number
-                                       δx_norm, # total norm of correction
-                                       δT,      # period correction
-                                       δs,      # shift correction
-                                       sum(T),  # new period
-                                       s,       # new shift
-                                       e_norm,  # error norm after step
-                                       λ)       # step length
+        opts.verbose && display_status(opts.io,    # input/output channel
+                                       iter,       # iteration number
+                                       δx_norm,    # total norm of correction
+                                       sum(b.T),   # period correction
+                                       b.s,        # shift correction
+                                       sum(z0.T),  # new period
+                                       z0.s,       # new shift
+                                       e_norm,     # error norm after step
+                                       λ)          # step length
 
         # tolerances reached
         e_norm  < opts.e_tol && break # norm of error
