@@ -1,6 +1,7 @@
 # -------------------------------------------------------------- #
 # Copyright 2017, Davide Lasagna, AFM, University of Southampton #
 # -------------------------------------------------------------- #
+import Flows
 
 function e_norm_λ(G, S, z0::MVector{X, N}, δz::MVector{X, N}, λ::Real, tmp::X) where {X, N}
     # initialize
@@ -29,9 +30,23 @@ function linesearch(G, S, z0::MVector{X, N}, δz::MVector{X, N}, opts::Options, 
     # start with full Newton step
     λ = 1.0
 
+    # initialize this variable
+    val_λ = λ*val_0
+
     for iter = 1:opts.ls_maxiter
-        # calc error
-        val_λ = e_norm(G, S, z0, δz, λ, tmp)
+        # calculate error
+        try
+            val_λ = e_norm_λ(G, S, z0, δz, λ, tmp)
+        catch err
+            # We might end up in a situation where the
+            # new time span has nehative length. In
+            # such a case, we might just continue
+            if isa(err, Flows.InvalidSpanError)
+                continue
+            else
+                rethrow(err)
+            end
+        end
         
         # accept any reduction of error
         val_λ < val_0 && return λ, val_λ
