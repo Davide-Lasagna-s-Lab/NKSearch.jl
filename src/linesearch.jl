@@ -2,7 +2,7 @@
 # Copyright 2017, Davide Lasagna, AFM, University of Southampton #
 # -------------------------------------------------------------- #
 
-function e_norm(G, S, z0::MVector{X, N}, δz::MVector{X, N}, λ::Real, tmp::X) where {X, N}
+function e_norm_λ(G, S, z0::MVector{X, N}, δz::MVector{X, N}, λ::Real, tmp::X) where {X, N}
     # initialize
     val_λ = zero(norm(tmp)^2)
     
@@ -23,9 +23,8 @@ end
 
 
 function linesearch(G, S, z0::MVector{X, N}, δz::MVector{X, N}, opts::Options, tmp::X) where {X, N}
-
     # current error
-    val_0 = e_norm(G, S, z0, δz, 0.0, tmp)
+    val_0 = e_norm_λ(G, S, z0, δz, 0.0, tmp)
 
     # start with full Newton step
     λ = 1.0
