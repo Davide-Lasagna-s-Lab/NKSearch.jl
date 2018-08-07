@@ -32,8 +32,9 @@ function Base.A_mul_B!(out::MVector{X, N},
                          A::MMatrix{X, N}, 
                         δz::MVector{X, N}) where {X, N}
     # aliases
-    x0, xT, T, s, δT, δs, tmp = A.x0, A.xT, A.T, A.s, δz.T, δz.s
+    x0, xT, T, s, δT, δs, tmp = A.x0, A.xT, A.T, A.s, δz.T, δz.s, A.tmp
     G, L, S, dG, dS = A.G, A.L, A.S, A.dG, A.dS
+    caches = A.caches
 
     # compute L{x0[i]}⋅δz[i] - δz[i+1] (last element gets shifted)
     for i = 1:N
