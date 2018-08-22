@@ -20,7 +20,7 @@ end
 
 # outer constructor
 MVector(x::NTuple{N, X}, T::NTuple{3, Real}, s::Real) where {X, N} = 
-	MVector{X, N}(x, convert(NTuple{3, Float64}, T), s)
+    MVector{X, N}(x, convert(NTuple{3, Float64}, T), s)
 
 # getindex to have z[i] mean z.x[i]
 Base.getindex(z::MVector, i::Int) = z.x[i]
@@ -41,10 +41,10 @@ _get_T(z) = z
 _get_s(z) = z
 
 @generated function Base.Broadcast.broadcast!(f, dest::MVector{X, N}, 
-										   args::Vararg{Any, n}) where {X, N, n}
+                                           args::Vararg{Any, n}) where {X, N, n}
     expr = quote
-    	dest.T = broadcast(f, map(_get_T, args)...)
-    	dest.s = broadcast(f, map(_get_s, args)...)
+        dest.T = broadcast(f, map(_get_T, args)...)
+        dest.s = broadcast(f, map(_get_s, args)...)
     end
     for i = 1:N
         rhs = [:(_get_seed(args[$j], $i)) for j = 1:n]
