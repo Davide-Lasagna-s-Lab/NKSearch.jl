@@ -45,6 +45,7 @@ _get_s(z) = z
     expr = quote
         dest.T = broadcast(f, map(_get_T, args)...)
         dest.s = broadcast(f, map(_get_s, args)...)
+        return dest
     end
     for i = 1:N
         rhs = [:(_get_seed(args[$j], $i)) for j = 1:n]
