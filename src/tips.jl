@@ -28,14 +28,14 @@ _checksize(out, dJdU0_L, dJdU0_R) =
 
 # ////// ACTUAL TYPE FOR CALCULATIONS //////
 struct GradientCache{P, F, D, R, X, C} 
-      ϕ::P              # nonlinear propagator
-  dϕdt!::F              # nonlinear equation right hand side
-   ddx!::D              # x derivative
-     ψ⁺::R              # linearised adjoint propagator
- caches::Tuple{C, C}    # two stage caches filled by the nonlinear operator
-    U0_C::X             # right initial condition
-    UF_C::X             # left terminal condition
-     TMP::NTuple{10, X} # temporaries
+      ϕ::P             # nonlinear propagator
+  dϕdt!::F             # nonlinear equation right hand side
+   ddx!::D             # x derivative
+     ψ⁺::R             # linearised adjoint propagator
+ caches::Tuple{C, C}   # two stage caches filled by the nonlinear operator
+   U0_C::X             # right initial condition
+   UF_C::X             # left terminal condition
+    TMP::NTuple{10, X} # temporaries
 end
 
 # constructor
