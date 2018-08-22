@@ -6,16 +6,15 @@ import GMRES
 export search!
 
 function search!(G, L, S, dG, dS,
-                 caches::NTuple{N, C},
-                     z0::MVector{X, N},
-                   opts::Options=Options()) where {X, N, C}
+                   z0::MVector{X, N},
+                 opts::Options=Options()) where {X, N, C}
     # display nice header
     opts.verbose && display_header(opts.io)
 
     # allocate memory
     b   = similar(z0)                           # right hand side
     tmp = similar(z0[1])                        # temporary
-    A   = MMatrix(G, L, S, dG, dS, caches, z0)  # Newton update equation matrix operator
+    A   = MMatrix(G, L, S, dG, dS, z0)  # Newton update equation matrix operator
 
     # calculate initial error
     e_norm = e_norm_λ(G, S, z0, z0, 0.0, tmp)

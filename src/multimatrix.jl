@@ -4,13 +4,12 @@
 import Flows
 
 # ~~~ Matrix Type ~~~
-mutable struct MMatrix{X, N, GType, LType, SType, dGType, dSType, C}
+mutable struct MMatrix{X, N, GType, LType, SType, dGType, dSType}
       G::GType              # flow operator with no shifts
       L::LType              # linearised flow operator with no shifts
       S::SType              # space shift operator
      dG::dGType             # derivative of G wrt to time
      dS::dSType             # derivative of S wrt to the shift
- caches::NTuple{N, C}       # caches for the forward state
      x0::NTuple{N, X}       # current initial seeds
      xT::NTuple{N, X}       # time shifted conditions
       T::NTuple{3, Float64} # orbit period
@@ -19,8 +18,8 @@ mutable struct MMatrix{X, N, GType, LType, SType, dGType, dSType, C}
 end
 
 # Main outer constructor
-MMatrix(G, L, S, dG, dS, caches::NTuple{N, C}, z0::MVector{X, N}) where {X, N, C } =
-    MMatrix(G, L, S, dG, dS, caches,
+MMatrix(G, L, S, dG, dS, z0::MVector{X, N}) where {X, N} =
+    MMatrix(G, L, S, dG, dS,
              ntuple(j->similar(z0[1]), N), ntuple(j->similar(z0[1]), N),
              z0.T, z0.s, similar(z0[1]))
 
@@ -34,12 +33,11 @@ function Base.A_mul_B!(out::MVector{X, N},
     # aliases
     x0, xT, T, s, δT, δs, tmp = A.x0, A.xT, A.T, A.s, δz.T, δz.s, A.tmp
     G, L, S, dG, dS = A.G, A.L, A.S, A.dG, A.dS
-    caches = A.caches
 
     # compute L{x0[i]}⋅δz[i] - δz[i+1] (last element gets shifted)
     for i = 1:N
         out[i] .= δz[i]
-        L(out[i], caches[i])
+        L(Flows.couple(x0[i], out[i]), (0, T/N))
         i == N && S(out[i], s)
         out[i] .-= δz[i%N+1]
     end
@@ -71,7 +69,7 @@ function update!(A::MMatrix{X, N},
     A.T, A.s, b.T, b.s = z0.T, z0.s, (0.0, 0.0, 0.0), 0.0
     
     # aliases
-    x0, xT, G, S, T, s, caches = A.x0, A.xT, A.G, A.S, A.T, A.s, A.caches
+    x0, xT, G, S, T, s = A.x0, A.xT, A.G, A.S, A.T, A.s
     
     # update initial and final states, including the caches
     for i = 1:N
@@ -79,7 +77,7 @@ function update!(A::MMatrix{X, N},
         xT[i] .= x0[i]
         Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
         # do not care about the right time span for autonomous systems
-        G(xT[i], (0, Ti), Flows.reset!(caches[i]))
+        G(xT[i], (0, Ti))
         # last one get shifted
         i == N && S(xT[i], s)
     end
