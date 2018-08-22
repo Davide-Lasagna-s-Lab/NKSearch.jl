@@ -7,7 +7,7 @@ export search!
 
 function search!(G, L, S, dG, dS,
                    z0::MVector{X, N},
-                 opts::Options=Options()) where {X, N, C}
+                 opts::Options=Options()) where {X, N}
     # display nice header
     opts.verbose && display_header(opts.io)
 
