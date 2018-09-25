@@ -41,12 +41,11 @@ function linesearch(G, S, z0::MVector{X, N}, δz::MVector{X, N}, opts::Options, 
             # We might end up in a situation where the
             # new time span has nehative length. In
             # such a case, we might just continue
-            if isa(err, Flows.InvalidSpanError)
-                continue
-            else
+            if !isa(err, Flows.InvalidSpanError)
                 rethrow(err)
             end
         end
+        # @printf "%3d - %7.5e - %20.16f\n" iter λ val_λ
         
         # accept any reduction of error
         val_λ < val_0 && return λ, val_λ
