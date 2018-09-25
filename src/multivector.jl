@@ -4,12 +4,11 @@
 
 export MVector
 
-# ~~~ INTERFACE FOR MVector and NKMatrix ~~~
+# ~~~ INTERFACE FOR MVector and MMatrix ~~~
 # The type parameter `X` must support
 # 1) dot(::X, ::X)
 # 2) similar(::X)
-# 3) full broadcast functionality, with variables of type `X` and scalars, by
-#    overloading `Base.broadcast!(f, ::X, ::Vararg{X, N}) where N
+# 3) full broadcast functionality, with variables of type `X` and scalars
 
 # ~~~ Vector Type ~~~
 mutable struct MVector{X, N}
@@ -21,10 +20,6 @@ mutable struct MVector{X, N}
         new{X, N}(x, T, s)
     end
 end
-
-# outer constructor
-# MVector(x::NTuple{N, X}, T::NTuple{3, Real}, s::Real) where {X, N} = 
-    # MVector{X, N}(x, convert(NTuple{3, Float64}, T), s)
 
 # getindex to have z[i] mean z.x[i]
 Base.getindex(z::MVector, i::Int) = z.x[i]
