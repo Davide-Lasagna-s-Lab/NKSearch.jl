@@ -16,7 +16,7 @@ mutable struct MVector{X, N}
     T::NTuple{3, Float64} # orbit period
     s::Float64            # shift
     function MVector(x::NTuple{N, X}, T::NTuple{3, Real}, s::Real) where {N, X}
-        N ≥ 2 || throw(ArgumentError("length of input tuple must be greater than two"))
+        N ≥ 3 || throw(ArgumentError("length of input tuple must be greater than two"))
         new{X, N}(x, T, s)
     end
 end

@@ -7,7 +7,9 @@ using asis
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 @testset "MVector - interface                   " begin
-    # multiple seeds
+    # test constructor
+    @test_throws ArgumentError MVector(([1, 2, 3], [7, 8, 9]), (0.0, 1.0, 2.0), 4.0)
+
     a = MVector(([1, 2, 3], [4, 5, 6], [7, 8, 9]), (0.0, 1.0, 2.0), 4.0)
     b = copy(a)
     @test a[1] == [1, 2, 3]
