@@ -39,8 +39,9 @@ _get_seed(z, i) = z
 _get_T(z) = z
 _get_s(z) = z
 
-@generated function Base.Broadcast.broadcast!(f, dest::MVector{X, N}, 
-                                           args::Vararg{Any, n}) where {X, N, n}
+@generated function Base.Broadcast.broadcast!(f,
+                                              dest::MVector{X, N},
+                                              args::Vararg{Any, n}) where {X, N, n}
     expr = quote
         dest.T = broadcast(f, map(_get_T, args)...)
         dest.s = broadcast(f, map(_get_s, args)...)
