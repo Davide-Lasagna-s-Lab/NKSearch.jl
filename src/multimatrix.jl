@@ -65,8 +65,8 @@ function Base.A_mul_B!(out::MVector{X, N},
 end
 
 # Update the linear operator and rhs arising in the Newton-Raphson iterations
-function update!(A::MMatrix{X, N}, 
-                 b::MVector{X, N}, 
+function update!(A::MMatrix{X, N},
+                 b::MVector{X, N},
                 z0::MVector{X, N}) where {X, N}
     # update shifts
     A.T, A.s, b.T, b.s = z0.T, z0.s, (0.0, 0.0, 0.0), 0.0
@@ -74,7 +74,7 @@ function update!(A::MMatrix{X, N},
     # aliases
     x0, xT, G, S, T, s = A.x0, A.xT, A.G, A.S, A.T, A.s
     
-    # update initial and final states, including the caches
+    # update initial and final states
     for i = 1:N
         x0[i] .= z0[i]
         xT[i] .= x0[i]

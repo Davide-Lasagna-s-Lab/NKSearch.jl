@@ -5,6 +5,18 @@ import GMRES
 
 export search!
 
+# Arguments
+# ---------
+# G    : nonlinear propagator  - obeys `G(x, (0, T))` where `x` is modified in place
+# L    : linearised propagator - obeys `L(Flows.couple(x, y), (0, T))` where `x` 
+#        and `y` are modified in place
+# S    : spatial shift operator - obeys `S(x, s)` where `x` is shifted by `s`
+# dG   : derivative of `G(x, (0, T))` wrt to `T` - obeys `dG(out, x)`, where 
+#        `out` gets overwritten
+# dS   : derivative of `S` wrt to `s` - obeys `dS(out, x)` where `out` gets
+#        overwritten
+# z0   : initial guess vector, gets overwritten
+# opts : search options (see src/options.jl)
 function search!(G, L, S, dG, dS,
                    z0::MVector{X, N},
                  opts::Options=Options()) where {X, N}
@@ -12,8 +24,8 @@ function search!(G, L, S, dG, dS,
     opts.verbose && display_header(opts.io)
 
     # allocate memory
-    b   = similar(z0)                           # right hand side
-    tmp = similar(z0[1])                        # temporary
+    b   = similar(z0)                   # right hand side
+    tmp = similar(z0[1])                # temporary
     A   = MMatrix(G, L, S, dG, dS, z0)  # Newton update equation matrix operator
 
     # calculate initial error
