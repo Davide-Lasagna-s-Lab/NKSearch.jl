@@ -27,8 +27,8 @@ MMatrix(G, L, S, dG, dS, z0::MVector{X, N}) where {X, N} =
 Base.:*(A::MMatrix{X}, δz::MVector{X}) where {X} = A_mul_B!(similar(δz), A, δz)
 
 # Compute mat-vec product
-function Base.A_mul_B!(out::MVector{X, N}, 
-                         A::MMatrix{X, N}, 
+function Base.A_mul_B!(out::MVector{X, N},
+                         A::MMatrix{X, N},
                         δz::MVector{X, N}) where {X, N}
     # aliases
     x0, xT, T, s, δT, δs, tmp = A.x0, A.xT, A.T, A.s, δz.T, δz.s, A.tmp
@@ -53,7 +53,7 @@ function Base.A_mul_B!(out::MVector{X, N},
 
     # shift derivative
     out[N] .+= dS(tmp, xT[N]).*δs
-   
+
     # phase locking constraints
     a     = dot(δz[1], dG(tmp, x0[1]))
     b     = dot(δz[2], dG(tmp, x0[2]))
@@ -70,10 +70,10 @@ function update!(A::MMatrix{X, N},
                 z0::MVector{X, N}) where {X, N}
     # update shifts
     A.T, A.s, b.T, b.s = z0.T, z0.s, (0.0, 0.0, 0.0), 0.0
-    
+
     # aliases
     x0, xT, G, S, T, s = A.x0, A.xT, A.G, A.S, A.T, A.s
-    
+
     # update initial and final states
     for i = 1:N
         x0[i] .= z0[i]
