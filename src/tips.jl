@@ -3,7 +3,6 @@
 # ----------------------------------------------------------------- #
 
 using Flows: AbstractStageCache, reset!
-# using Iterators
 
 export GradientCache, 
        fromvector!,
