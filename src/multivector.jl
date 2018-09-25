@@ -16,11 +16,15 @@ mutable struct MVector{X, N}
     x::NTuple{N, X}       # the seeds along the orbit
     T::NTuple{3, Float64} # orbit period
     s::Float64            # shift
+    function MVector(x::NTuple{N, X}, T::NTuple{3, Real}, s::Real) where {N, X}
+        N ≥ 2 || throw(ArgumentError("length of input tuple must be greater than two"))
+        new{X, N}(x, T, s)
+    end
 end
 
 # outer constructor
-MVector(x::NTuple{N, X}, T::NTuple{3, Real}, s::Real) where {X, N} = 
-    MVector{X, N}(x, convert(NTuple{3, Float64}, T), s)
+# MVector(x::NTuple{N, X}, T::NTuple{3, Real}, s::Real) where {X, N} = 
+    # MVector{X, N}(x, convert(NTuple{3, Float64}, T), s)
 
 # getindex to have z[i] mean z.x[i]
 Base.getindex(z::MVector, i::Int) = z.x[i]
