@@ -36,8 +36,11 @@ function Base.A_mul_B!(out::MVector{X, N},
 
     # compute L{x0[i]}⋅δz[i] - δz[i+1] (last element gets shifted)
     for i = 1:N
-        out[i] .= δz[i]
-        L(Flows.couple(x0[i], out[i]), (0, T/N))
+        out[i] .= δz[i] # set perturbation initial condition
+        tmp    .= x0[i] # set nonlinear    initial condition
+        # use the correct propagation time
+        Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
+        L(Flows.couple(tmp, out[i]), (0, Ti))
         i == N && S(out[i], s)
         out[i] .-= δz[i%N+1]
     end
