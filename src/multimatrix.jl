@@ -81,7 +81,7 @@ function update!(A::MMatrix{X, N},
         Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
         # do not care about the right time span for autonomous systems
         G(xT[i], (0, Ti))
-        # last one get shifted
+        # last one gets shifted
         i == N && S(xT[i], s)
     end
 
