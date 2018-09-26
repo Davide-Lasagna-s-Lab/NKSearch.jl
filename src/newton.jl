@@ -40,7 +40,8 @@ function search!(G, L, S, dG, dS,
                                    sum(z0.T),  # current period
                                    z0.s,       # current shift
                                    e_norm,     # error norm after step
-                                   0.0)        # step length
+                                   0.0,        # step length
+                                   0.0)        # GMRES residual norm
 
     # newton iterations loop
     for iter = 1:opts.maxiter
@@ -49,7 +50,10 @@ function search!(G, L, S, dG, dS,
         update!(A, b, z0)
 
         # solve system by overwriting b in place
-        GMRES.gmres!(A, b, opts.gmres_rtol, opts.gmres_maxiter, opts.gmres_verbose)
+        b, res_err_norm = GMRES.gmres!(A, b,
+                                       opts.gmres_rtol,
+                                       opts.gmres_maxiter,
+                                       opts.gmres_verbose)
 
         # perform line search
         λ, e_norm = linesearch(G, S, z0, b, opts, tmp)
@@ -61,15 +65,16 @@ function search!(G, L, S, dG, dS,
         δx_norm = sum(norm(b[i])^2 for i = 1:N)
 
         # display status if verbose
-        opts.verbose && display_status(opts.io,    # input/output channel
-                                       iter,       # iteration number
-                                       δx_norm,    # total norm of correction
-                                       sum(b.T),   # period correction
-                                       b.s,        # shift correction
-                                       sum(z0.T),  # new period
-                                       z0.s,       # new shift
-                                       e_norm,     # error norm after step
-                                       λ)          # step length
+        opts.verbose && display_status(opts.io,      # input/output channel
+                                       iter,         # iteration number
+                                       δx_norm,      # total norm of correction
+                                       sum(b.T),     # period correction
+                                       b.s,          # shift correction
+                                       sum(z0.T),    # new period
+                                       z0.s,         # new shift
+                                       e_norm,       # error norm after step
+                                       λ,            # step length
+                                       res_err_norm) # GMRES residual error
 
         # tolerances reached
         e_norm  < opts.e_tol && break # norm of error
