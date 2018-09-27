@@ -10,8 +10,9 @@ function e_norm_λ(G, S, z0::MVector{X, N}, δz::MVector{X, N}, λ::Real, tmp::X
     # sum all contributions
     for i = 1:N
         tmp  .= z0[i] .+ λ.*δz[i]
-        Ti    = i == 1 ? (z0.T[1] + λ*δz.T[1]) :
-                i == N ? (z0.T[3] + λ*δz.T[3]) : (z0.T[2] + λ*δz.T[2])/(N-2)
+        # Ti    = i == 1 ? (z0.T[1] + λ*δz.T[1]) :
+                # i == N ? (z0.T[3] + λ*δz.T[3]) : (z0.T[2] + λ*δz.T[2])/(N-2)
+        Ti = (z0.T + λ*δz.T)/N
         G(tmp, (0, Ti))
         i == N && S(tmp, z0.s + λ*δz.s)
         tmp .-= z0[i%N+1] .+ λ.*δz[i%N+1]

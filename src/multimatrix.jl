@@ -12,7 +12,7 @@ mutable struct MMatrix{X, N, GType, LType, SType, dGType, dSType}
      dS::dSType             # derivative of S wrt to the shift
      x0::NTuple{N, X}       # current initial seeds
      xT::NTuple{N, X}       # time shifted conditions
-      T::NTuple{3, Float64} # orbit period
+      T::Float64            # orbit period
       s::Float64            # spatial shift
     tmp::X                  # temporary storage
 end
@@ -39,16 +39,16 @@ function Base.A_mul_B!(out::MVector{X, N},
         out[i] .= δz[i] # set perturbation initial condition
         tmp    .= x0[i] # set nonlinear    initial condition
         # use the correct propagation time
-        Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
-        L(Flows.couple(tmp, out[i]), (0, Ti))
+        # Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
+        L(Flows.couple(tmp, out[i]), (0, T/N))
         i == N && S(out[i], s)
         out[i] .-= δz[i%N+1]
     end
 
     # period derivative
     for i = 1:N
-        d = i == 1 ? δT[1] : i == N ? δT[3] : δT[2]/(N-2)
-        out[i] .+= dG(tmp, xT[i]).*d
+        # d = i == 1 ? δT[1] : i == N ? δT[3] : δT[2]/(N-2)
+        out[i] .+= dG(tmp, xT[i]).*(δT./N)
     end
 
     # shift derivative
@@ -56,9 +56,9 @@ function Base.A_mul_B!(out::MVector{X, N},
 
     # phase locking constraints
     a     = dot(δz[1], dG(tmp, x0[1]))
-    b     = dot(δz[2], dG(tmp, x0[2]))
-    c     = dot(δz[N], dG(tmp, x0[N]))
-    out.T = (a, b, c)
+    # b     = dot(δz[2], dG(tmp, x0[2]))
+    # c     = dot(δz[N], dG(tmp, x0[N]))
+    out.T = a
     out.s = dot(δz[1], dS(tmp, x0[1]))
 
     return out
@@ -69,7 +69,7 @@ function update!(A::MMatrix{X, N},
                  b::MVector{X, N},
                 z0::MVector{X, N}) where {X, N}
     # update shifts
-    A.T, A.s, b.T, b.s = z0.T, z0.s, (0.0, 0.0, 0.0), 0.0
+    A.T, A.s, b.T, b.s = z0.T, z0.s, 0.0, 0.0
 
     # aliases
     x0, xT, G, S, T, s = A.x0, A.xT, A.G, A.S, A.T, A.s
@@ -78,9 +78,9 @@ function update!(A::MMatrix{X, N},
     for i = 1:N
         x0[i] .= z0[i]
         xT[i] .= x0[i]
-        Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
+        # Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
         # do not care about the right time span for autonomous systems
-        G(xT[i], (0, Ti))
+        G(xT[i], (0, T/N))
         # last one gets shifted
         i == N && S(xT[i], s)
     end

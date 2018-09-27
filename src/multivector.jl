@@ -13,10 +13,10 @@ export MVector
 # ~~~ Vector Type ~~~
 mutable struct MVector{X, N}
     x::NTuple{N, X}       # the seeds along the orbit
-    T::NTuple{3, Float64} # orbit period
+    T::Float64            # orbit period
     s::Float64            # shift
-    function MVector(x::NTuple{N, X}, T::NTuple{3, Real}, s::Real) where {N, X}
-        N ≥ 3 || throw(ArgumentError("length of input tuple must be greater than two"))
+    function MVector(x::NTuple{N, X}, T::Real, s::Real) where {N, X}
+        # N ≥ 3 || throw(ArgumentError("length of input tuple must be greater than two"))
         new{X, N}(x, T, s)
     end
 end
@@ -25,11 +25,11 @@ end
 Base.getindex(z::MVector, i::Int) = z.x[i]
 
 # interface for GMRES solver
-Base.similar(z::MVector) = MVector(similar.(z.x), (0.0, 0.0, 0.0), 0.0)
+Base.similar(z::MVector) = MVector(similar.(z.x), 0.0, 0.0)
 Base.copy(z::MVector) = MVector(copy.(z.x), z.T, z.s)
 Base.norm(z::MVector) = sqrt(dot(z, z))
 Base.dot(a::MVector{X, N}, b::MVector{X, N}) where {X, N} =
-    sum(a.T.*b.T) + (a.s*b.s) + sum(dot.(a.x, b.x))
+    a.T.*b.T + (a.s*b.s) + sum(dot.(a.x, b.x))
 
 # define stuff necessary to use . notation with MVector
 _get_seed(z::MVector, i::Int) = z.x[i]
