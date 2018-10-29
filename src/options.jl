@@ -20,4 +20,6 @@ export Options
     gmres_maxiter::Int  = 10     # maximum number of GMRES iterations
     gmres_verbose::Bool = true   # print GMRES iteration status
     gmres_rtol::Float64 = 1e-3   # GMRES relative stopping tolerance
+    ϵ::Float64          = 1e-6   # dt for finite difference approximation
+                                 # of the derivative of the flow operator
 end
