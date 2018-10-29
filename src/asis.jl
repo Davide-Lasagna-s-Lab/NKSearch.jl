@@ -4,10 +4,10 @@
 
 module asis
 
+include("options.jl")
 include("tips.jl")
 include("multivector.jl")
 include("multimatrix.jl")
-include("options.jl")
 include("output.jl")
 include("linesearch.jl")
 include("newton.jl")
