@@ -5,22 +5,25 @@ import Flows
 
 # ~~~ Matrix Type ~~~
 mutable struct MMatrix{X, N, GType, LType, SType, dGType, dSType}
-      G::GType              # flow operator with no shifts
-      L::LType              # linearised flow operator with no shifts
-      S::SType              # space shift operator
-     dG::dGType             # derivative of G wrt to time
-     dS::dSType             # derivative of S wrt to the shift
-     x0::NTuple{N, X}       # current initial seeds
-     xT::NTuple{N, X}       # time shifted conditions
-      T::NTuple{3, Float64} # orbit period
-      s::Float64            # spatial shift
-    tmp::X                  # temporary storage
+        G::GType              # flow operator with no shifts
+        L::LType              # linearised flow operator with no shifts
+        S::SType              # space shift operator
+       dG::dGType             # derivative of G wrt to time
+       dS::dSType             # derivative of S wrt to the shift
+       x0::NTuple{N, X}       # current initial seeds
+       xT::NTuple{N, X}       # time shifted conditions
+    dxTdT::NTuple{N, X}       # derivative of flow operator
+        T::NTuple{3, Float64} # orbit period
+        s::Float64            # spatial shift
+      tmp::X                  # temporary storage
 end
 
 # Main outer constructor
 MMatrix(G, L, S, dG, dS, z0::MVector{X, N}) where {X, N} =
     MMatrix(G, L, S, dG, dS,
-             ntuple(j->similar(z0[1]), N), ntuple(j->similar(z0[1]), N),
+             ntuple(j->similar(z0[1]), N),
+             ntuple(j->similar(z0[1]), N),
+             ntuple(j->similar(z0[1]), N),
              z0.T, z0.s, similar(z0[1]))
 
 # Main interface is matrix-vector product exposed to the Krylov solver
@@ -32,7 +35,7 @@ function Base.A_mul_B!(out::MVector{X, N},
                         δz::MVector{X, N}) where {X, N}
     # aliases
     x0, xT, T, s, δT, δs, tmp = A.x0, A.xT, A.T, A.s, δz.T, δz.s, A.tmp
-    G, L, S, dG, dS = A.G, A.L, A.S, A.dG, A.dS
+    G, L, S, dG, dS, dxTdT = A.G, A.L, A.S, A.dG, A.dS, A.dxTdT
 
     # compute L{x0[i]}⋅δz[i] - δz[i+1] (last element gets shifted)
     for i = 1:N
@@ -48,7 +51,7 @@ function Base.A_mul_B!(out::MVector{X, N},
     # period derivative
     for i = 1:N
         d = i == 1 ? δT[1] : i == N ? δT[3] : δT[2]/(N-2)
-        out[i] .+= dG(tmp, xT[i]).*d
+        out[i] .+= dxTdT[i].*d
     end
 
     # shift derivative
@@ -67,22 +70,33 @@ end
 # Update the linear operator and rhs arising in the Newton-Raphson iterations
 function update!(A::MMatrix{X, N},
                  b::MVector{X, N},
-                z0::MVector{X, N}) where {X, N}
+                z0::MVector{X, N}, opts::Options) where {X, N}
     # update shifts
     A.T, A.s, b.T, b.s = z0.T, z0.s, (0.0, 0.0, 0.0), 0.0
 
     # aliases
     x0, xT, G, S, T, s = A.x0, A.xT, A.G, A.S, A.T, A.s
+    tmp, ϵ, dxTdT = A.tmp, opts.ϵ, A.dxTdT
 
     # update initial and final states
     for i = 1:N
         x0[i] .= z0[i]
         xT[i] .= x0[i]
         Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
-        # do not care about the right time span for autonomous systems
+        ϵi = i == 1 ? ϵ    : i == N ? ϵ    :    ϵ/(N-2)
+
+        # get final point
         G(xT[i], (0, Ti))
+
+        # then get finite difference approximation of 
+        # derivative of the flow operator
+        tmp .= x0[i]
+        G(tmp, (0, Ti + ϵi))
+        dxTdT[i] .= (tmp .- xT[i])./ϵi
+
         # last one gets shifted
         i == N && S(xT[i], s)
+        i == N && S(dxTdT[i], s)
     end
 
     # calculate negative error

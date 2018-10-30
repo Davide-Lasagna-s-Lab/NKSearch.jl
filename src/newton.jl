@@ -47,7 +47,7 @@ function search!(G, L, S, dG, dS,
     for iter = 1:opts.maxiter
 
         # update Newton update matrix operator and right hand side
-        update!(A, b, z0)
+        update!(A, b, z0, opts)
 
         # solve system by overwriting b in place
         b, res_err_norm = GMRES.gmres!(A, b,
