@@ -95,6 +95,7 @@ function update!(A::MMatrix{X, N},
 
         # last one gets shifted
         i == N && S(xT[i], s)
+        i == N && S(dxTdT[i], s)
     end
 
     # calculate negative error
