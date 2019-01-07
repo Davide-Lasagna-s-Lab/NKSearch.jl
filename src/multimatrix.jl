@@ -4,104 +4,118 @@
 import Flows
 
 # ~~~ Matrix Type ~~~
-mutable struct MMatrix{X, N, GType, LType, SType, dGType, dSType}
-        G::GType              # flow operator with no shifts
-        L::LType              # linearised flow operator with no shifts
-        S::SType              # space shift operator
-       dG::dGType             # derivative of G wrt to time
-       dS::dSType             # derivative of S wrt to the shift
-       x0::NTuple{N, X}       # current initial seeds
-       xT::NTuple{N, X}       # time shifted conditions
-    dxTdT::NTuple{N, X}       # time derivative of flow operator
-        T::Float64            # orbit period
-        s::Float64            # spatial shift
-      tmp::X                  # temporary storage
+struct MMatrix{X, N, NS, GType, LType, SType, DType}
+        G::GType         # flow operator with no shifts
+        L::LType         # linearised flow operator with no shifts
+        S::SType         # space shift operator (can be NoShift)
+        D::FType         # time (and space) derivative operator
+       xT::NTuple{N, X}  # time shifted conditions
+    dxTdT::NTuple{N, X}  # time derivative of flow operator
+       z0::MVector{X, N} # current orbit
+      tmp::X             # temporary storage
 end
 
 # Main outer constructor
-MMatrix(G, L, S, dG, dS, z0::MVector{X, N}) where {X, N} =
-    MMatrix(G, L, S, dG, dS,
+MMatrix(G, L, S, F, dS, z0::MVector{X, N, NS}) where {X, N, NS} =
+    MMatrix(G, L, S, F, dS,
              ntuple(j->similar(z0[1]), N),
              ntuple(j->similar(z0[1]), N),
-             ntuple(j->similar(z0[1]), N),
-             z0.T, z0.s, similar(z0[1]))
+             z0, similar(z0[1]))
+
+MMatrix(G, L, F, z0::MVector{X, N, 1}) where {X, N} =
+    MMatrix(G, L, nothing, (F, ), z0)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
-Base.:*(A::MMatrix{X}, δz::MVector{X}) where {X} = A_mul_B!(similar(δz), A, δz)
+Base.:*(mm::MMatrix{X}, δz::MVector{X}) where {X} = A_mul_B!(similar(δz), mm, δz)
 
 # Compute mat-vec product
-function Base.A_mul_B!(out::MVector{X, N},
-                         A::MMatrix{X, N},
-                        δz::MVector{X, N}) where {X, N}
+function Base.A_mul_B!(out::MVector{X, N, NS},
+                        mm::MMatrix{X, N, NS},
+                        δz::MVector{X, N, NS}) where {X, N, NS}
     # aliases
-    x0, xT, T, s, δT, δs, tmp = A.x0, A.xT, A.T, A.s, δz.T, δz.s, A.tmp
-    G, L, S, dG, dS, dxTdT = A.G, A.L, A.S, A.dG, A.dS, A.dxTdT
+    xT    = mm.xT
+    G     = mm.G
+    L     = mm.L
+    D     = mm.D
+    S     = mm.S
+    z0    = mm.z0
+    tmp   = mm.tmp
+    dxTdT = mm.dxTdT
+    T     = mm.z0.d[1]
+    ϵ     = opts.ϵ
 
-    # compute L{x0[i]}⋅δz[i] - δz[i+1] (last element gets shifted)
+    # compute L{x0[i]}⋅δz[i] - δz[i+1]
     for i = 1:N
-        out[i] .= δz[i] # set perturbation initial condition
-        tmp    .= x0[i] # set nonlinear    initial condition
-        # use the correct propagation time
-        # Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
+        # set perturbation initial condition
+        out[i] .= δz[i]
+
+        # set nonlinear initial condition
+        tmp      .= z0[i]
+
+        # propagate by T/N
         L(Flows.couple(tmp, out[i]), (0, T/N))
-        i == N && S(out[i], s)
-        out[i] .-= δz[i%N+1]
+
+        # apply shift on last segment (if we have one)
+        NS == 2 && i == N && S(out[i], z0.d[2])
+        
+        # this is the identity operators on the upper diagonal
+        out[i] .-= δz[i%N + 1]
     end
 
     # period derivative
     for i = 1:N
-        # d = i == 1 ? δT[1] : i == N ? δT[3] : δT[2]/(N-2)
-        out[i] .+= dxTdT[i].*(δT./N)
+        out[i] .+= dxTdT[i].*(δz.d[1]./N)
     end
 
-    # shift derivative
-    out[N] .+= dS(tmp, xT[N]).*δs
+    # shift derivative (if present) goes only on last element
+    NS == 2 && (out[N] .+= D[2](tmp, xT[N]).*δz.d[2])
 
-    # phase locking constraints
-    a     = dot(δz[1], dG(tmp, x0[1]))
-    # b     = dot(δz[2], dG(tmp, x0[2]))
-    # c     = dot(δz[N], dG(tmp, x0[N]))
-    out.T = a
-    out.s = dot(δz[1], dS(tmp, x0[1]))
+    # add phase locking constraints
+    out.d = ntuple(j->dot(δz[1], D[j](tmp, z0[1])), NS)
 
     return out
 end
 
 # Update the linear operator and rhs arising in the Newton-Raphson iterations
-function update!(A::MMatrix{X, N},
-                 b::MVector{X, N},
-                z0::MVector{X, N}, opts::Options) where {X, N}
-    # update shifts
-    A.T, A.s, b.T, b.s = z0.T, z0.s, 0.0, 0.0
+function update!(mm::MMatrix{X, N, NS},
+                  b::MVector{X, N, NS},
+               opts::Options) where {X, N, NS}
 
     # aliases
-    x0, xT, G, S, T, s = A.x0, A.xT, A.G, A.S, A.T, A.s
-    tmp, dxTdT, ϵ = A.tmp, A.dxTdT, opts.ϵ
+    xT    = mm.xT
+    G     = mm.G
+    S     = mm.S
+    z0    = mm.z0
+    tmp   = mm.tmp
+    dxTdT = mm.dxTdT
+    ϵ     = opts.ϵ
+    T     = mm.z0.d[1]
 
     # update initial and final states
     for i = 1:N
-        x0[i] .= z0[i]
-        xT[i] .= x0[i]
-        # Ti = i == 1 ? T[1] : i == N ? T[3] : T[2]/(N-2)
-        
-        # get end point
+        # set and propagate
+        xT[i] .= z0[i]
         G(xT[i], (0, T/N))
         
-        # then get finite difference approximation of 
-        # derivative of the flow operator
-        tmp .= x0[i]
+        # then get finite difference approximation of derivative
+        # of the flow operator with one additional propagation
+        tmp .= z0[i]
         G(tmp, (0, T/N + ϵ))
         dxTdT[i] .= (tmp .- xT[i])./ϵ
 
-        # last one gets shifted
-        i == N && S(xT[i], s)
-        i == N && S(dxTdT[i], s)
+        # last one gets shifted (if we have one)
+        NS == 2 && i == N && S(   xT[i], z0.d[2])
+        NS == 2 && i == N && S(dxTdT[i], z0.d[2])
     end
 
+    # ~~ RIGHT HAND SIDE ~~
     # calculate negative error
     for i = 1:N
-        b[i] .= x0[i%N+1] .- xT[i]
+        b[i] .= z0[i%N+1] .- xT[i]
     end
+
+    # reset shifts
+    b.ds = zero.(b.ds)
 
     return nothing
 end
