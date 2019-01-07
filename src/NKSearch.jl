@@ -4,11 +4,11 @@
 
 module NKSearch
 
-include("options.jl")
-include("output.jl")
+# include("options.jl")
+# include("output.jl")
 include("multivector.jl")
-include("multimatrix.jl")
-include("linesearch.jl")
-include("newton.jl")
+# include("multimatrix.jl")
+# include("linesearch.jl")
+# include("newton.jl")
 
 end

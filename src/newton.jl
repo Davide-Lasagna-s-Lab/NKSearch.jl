@@ -66,7 +66,7 @@ function _search!(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
         λ, e_norm = linesearch(G, S, z0, b, opts, tmp)
 
         # actually apply correction
-        z0 .+= λ.*b
+        z0 .= λ.*b
 
         # correction norm
         δx_norm = sum(norm(b[i])^2 for i = 1:N)
