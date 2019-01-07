@@ -9,7 +9,7 @@ struct MMatrix{X, N, NS, GType, LType, SType, DType}
         G::GType         # flow operator with no shifts
         L::LType         # linearised flow operator with no shifts
         S::SType         # space shift operator (can be NoShift)
-        D::FType         # time (and space) derivative operator
+        D::DType         # time (and space) derivative operator
        xT::NTuple{N, X}  # time shifted conditions
     dxTdT::NTuple{N, X}  # time derivative of flow operator
        z0::MVector{X, N} # current orbit
@@ -17,19 +17,19 @@ struct MMatrix{X, N, NS, GType, LType, SType, DType}
 end
 
 # Main outer constructor
-MMatrix(G, L, S, D z0::MVector{X, N, NS}) where {X, N, NS} =
+MMatrix(G, L, S, D, z0::MVector{X, N, NS}) where {X, N, NS} =
     MMatrix(G, L, S, D,
              ntuple(j->similar(z0[1]), N),
              ntuple(j->similar(z0[1]), N),
              z0, similar(z0[1]))
 
 # Main interface is matrix-vector product exposed to the Krylov solver
-Base.:*(mm::MMatrix{X}, δz::MVector{X}) where {X} = A_mul_B!(similar(δz), mm, δz)
+Base.:*(mm::MMatrix{X}, δz::MVector{X}) where {X} = mul!(similar(δz), mm, δz)
 
 # Compute mat-vec product
-function Base.A_mul_B!(out::MVector{X, N, NS},
-                        mm::MMatrix{X, N, NS},
-                        δz::MVector{X, N, NS}) where {X, N, NS}
+function mul!(out::MVector{X, N, NS},
+               mm::MMatrix{X, N, NS},
+               δz::MVector{X, N, NS}) where {X, N, NS}
     # aliases
     xT    = mm.xT
     G     = mm.G

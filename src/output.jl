@@ -1,6 +1,7 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
+using Printf
 
 # Display headers
 const _header_1 = "+------+----------+-----------+----------+----------+----------+----------+\n"*
@@ -13,7 +14,7 @@ const _header_2 = "+------+----------+-----------+-----------+----------+-------
 
 const _headers = [_header_1, _header_2]
 
-display_header(io::IO, ::MVector{X, N, NS})= (print(io, _headers[NS]); flush(io))
+display_header(io::IO, ::MVector{X, N, NS}) where {X, N, NS} = (print(io, _headers[NS]); flush(io))
 
 # print output when we have a shift
 function display_status(io::IO, iter, δx_norm, δd::TUP2, d::TUP2, e_norm, λ, res_err_norm) where {TUP2<:Tuple{Any, Any}}

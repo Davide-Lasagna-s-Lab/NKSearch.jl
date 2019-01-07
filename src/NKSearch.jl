@@ -5,7 +5,6 @@
 module NKSearch
 
 include("options.jl")
-include("tips.jl")
 include("multivector.jl")
 include("multimatrix.jl")
 include("output.jl")
