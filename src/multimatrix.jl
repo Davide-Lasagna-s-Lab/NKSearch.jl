@@ -16,14 +16,11 @@ struct MMatrix{X, N, NS, GType, LType, SType, DType}
 end
 
 # Main outer constructor
-MMatrix(G, L, S, F, dS, z0::MVector{X, N, NS}) where {X, N, NS} =
-    MMatrix(G, L, S, F, dS,
+MMatrix(G, L, S, D z0::MVector{X, N, NS}) where {X, N, NS} =
+    MMatrix(G, L, S, D,
              ntuple(j->similar(z0[1]), N),
              ntuple(j->similar(z0[1]), N),
              z0, similar(z0[1]))
-
-MMatrix(G, L, F, z0::MVector{X, N, 1}) where {X, N} =
-    MMatrix(G, L, nothing, (F, ), z0)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(mm::MMatrix{X}, δz::MVector{X}) where {X} = A_mul_B!(similar(δz), mm, δz)
