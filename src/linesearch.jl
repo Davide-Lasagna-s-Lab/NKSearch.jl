@@ -3,18 +3,34 @@
 # -------------------------------------------------------------- #
 import Flows
 
-function e_norm_λ(G, S, z0::MVector{X, N}, δz::MVector{X, N}, λ::Real, tmp::X) where {X, N}
+function e_norm_λ(G,
+                  S,
+                 z0::MVector{X, N, NS},
+                 δz::MVector{X, N, NS},
+                  λ::Real,
+                tmp::X) where {X, N, NS}
+
     # initialize
     val_λ = zero(norm(tmp)^2)
     
-    # sum all contributions
+    # sum all error contributions
     for i = 1:N
+        # set initial condition
         tmp  .= z0[i] .+ λ.*δz[i]
-        Ti    = i == 1 ? (z0.T[1] + λ*δz.T[1]) :
-                i == N ? (z0.T[3] + λ*δz.T[3]) : (z0.T[2] + λ*δz.T[2])/(N-2)
+        
+        # and propagation time
+        Ti = (z0.d[1] + λ*δz.d[1])/N
+
+        # actual propagation
         G(tmp, (0, Ti))
-        i == N && S(tmp, z0.s + λ*δz.s)
+
+        # last segment is shifted (if we have a shift)
+        NS == 2 && i == N && S(tmp, z0.d[2] + λ*δz.d[2])
+
+        # calc difference
         tmp .-= z0[i%N+1] .+ λ.*δz[i%N+1]
+
+        # add to error
         val_λ += norm(tmp)^2
     end
 
@@ -45,7 +61,6 @@ function linesearch(G, S, z0::MVector{X, N}, δz::MVector{X, N}, opts::Options, 
                 rethrow(err)
             end
         end
-        # @printf "%3d - %7.5e - %20.16f\n" iter λ val_λ
         
         # accept any reduction of error
         val_λ < val_0 && return λ, val_λ

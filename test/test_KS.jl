@@ -1,5 +1,5 @@
 using Base.Test
-using Flows, KS, asis
+using Flows, KS, NKSearch
 
 @testset "test f and g! for single shooting      " begin
     # parameters

@@ -2,7 +2,7 @@
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
 
-module asis
+module NKSearch
 
 include("options.jl")
 include("tips.jl")
