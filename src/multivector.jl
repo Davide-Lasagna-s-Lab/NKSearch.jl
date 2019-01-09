@@ -42,7 +42,7 @@ Base.BroadcastStyle(::Broadcast.DefaultArrayStyle{1},
                     ::Broadcast.ArrayStyle{MVector}) = Broadcast.DefaultArrayStyle{1}()
 
 # a hack really!
-Base.size(::MVector) = (1, )
+Base.size(z::MVector{X, N, NS}) where {X, N, NS} = (NS + N*length(z.x[1]), )
 
 # getters
 _get_seed(z::MVector, i) = z.x[i]
