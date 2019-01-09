@@ -12,12 +12,12 @@ function e_norm_λ(G,
 
     # initialize
     val_λ = zero(norm(tmp)^2)
-    
+
     # sum all error contributions
     for i = 1:N
         # set initial condition
         tmp  .= z0[i] .+ λ.*δz[i]
-        
+
         # and propagation time
         Ti = (z0.d[1] + λ*δz.d[1])/N
 
@@ -61,13 +61,13 @@ function linesearch(G, S, z0::MVector{X, N}, δz::MVector{X, N}, opts::Options, 
                 rethrow(err)
             end
         end
-        
+
         # accept any reduction of error
         val_λ < val_0 && return λ, val_λ
-        
+
         # ~ otherwise attempt with shorter step ~
         λ *= opts.ls_rho
-    end 
+    end
 
     error("maximum number of line search iterations reached")
 end

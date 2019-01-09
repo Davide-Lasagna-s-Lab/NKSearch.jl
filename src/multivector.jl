@@ -32,7 +32,7 @@ LinearAlgebra.norm(z::MVector) = sqrt(LinearAlgebra.dot(z, z))
 LinearAlgebra.dot(a::MVector{X, N}, b::MVector{X, N}) where {X, N} =
     sum(a.d.*b.d) + sum(LinearAlgebra.dot.(a.x, b.x))
 
-# define stuff necessary to use . notation with MVector (only works 
+# define stuff necessary to use . notation with MVector (only works
 # for short! expressions) otherwise code is very slow!
 const MVectorStyle = Broadcast.ArrayStyle{MVector}
 Base.BroadcastStyle(::Type{<:MVector}) = Broadcast.ArrayStyle{MVector}()

@@ -15,7 +15,7 @@ struct MMatrix{X, N, NS, GType, LType, SType, DType}
     dxTdT::NTuple{N, X}      # time derivative of flow operator
        z0::MVector{X, N, NS} # current orbit
       tmp::X                 # temporary storage
-     opts::Options           # 
+     opts::Options           #
 end
 
 # Main outer constructor
@@ -54,7 +54,7 @@ function mul!(out::MVector{X, N, NS},
 
         # apply shift on last segment (if we have one)
         NS == 2 && i == N && S(out[i], z0.d[2])
-        
+
         # this is the identity operators on the upper diagonal
         out[i] .-= δz[i%N + 1]
     end
@@ -93,7 +93,7 @@ function update!(mm::MMatrix{X, N, NS},
         # set and propagate
         xT[i] .= z0[i]
         G(xT[i], (0, T/N))
-        
+
         # then get finite difference approximation of derivative
         # of the flow operator with one additional propagation
         tmp .= z0[i]

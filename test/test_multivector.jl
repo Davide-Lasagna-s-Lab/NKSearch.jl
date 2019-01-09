@@ -20,7 +20,7 @@ end
     @test norm(a)   == norm([1, 2, 3, 4, 5, 6, 7, 8, 9, 2, 4])
     @test dot(a, b) ==  dot([1, 2, 3, 4, 5, 6, 7, 8, 9, 2, 4],
                             [1, 2, 5, 4, 5, 7, 7, 8, 1, 3, 1])
-    
+
     # test dot product does not allocate
     alloc(a, b) = @allocated dot(a, b)
     @test alloc(a, b) == 0
