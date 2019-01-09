@@ -9,10 +9,10 @@ export search!
 # Arguments
 # ---------
 # G    : nonlinear propagator  - obeys `G(x, (0, T))` where `x` is modified in place
-# L    : linearised propagator - obeys `L(Flows.couple(x, y), (0, T))` where `x` 
+# L    : linearised propagator - obeys `L(Flows.couple(x, y), (0, T))` where `x`
 #        and `y` are modified in place
 # S    : spatial shift operator - obeys `S(x, s)` where `x` is shifted by `s`
-# F    : the right hand side of the governing equations. Obeys `F(out, x)`, where 
+# F    : the right hand side of the governing equations. Obeys `F(out, x)`, where
 #        `out` gets overwritten
 # dS   : derivative of `S` wrt to `s` - obeys `dS(out, x)` where `out` gets
 #        overwritten

@@ -20,7 +20,7 @@ display_header(io::IO, ::MVector{X, N, NS}) where {X, N, NS} = (print(io, _heade
 function display_status(io::IO, iter, δx_norm, δd::TUP2, d::TUP2, e_norm, λ, res_err_norm) where {TUP2<:Tuple{Any, Any}}
     str = @sprintf "|%4d  | %5.2e | %+5.2e | %+5.2e | %5.2e | %+5.2e | %5.2e | %5.2e | %5.2e |" iter δx_norm δd[1] δd[2] d[1] d[2] e_norm λ res_err_norm
     println(io, str)
-    flush(io) 
+    flush(io)
     return nothing
 end
 
@@ -28,6 +28,6 @@ end
 function display_status(io::IO, iter, dz_norm, d::Tuple{Any}, e_norm, λ, res_err_norm)
     str = @sprintf "|%4d  | %5.2e | %+5.2e | %5.2e | %5.2e | %5.2e |" iter dz_norm d[1] e_norm λ res_err_norm
     println(io, str)
-    flush(io) 
+    flush(io)
     return nothing
 end

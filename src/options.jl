@@ -10,7 +10,7 @@ export Options
 
 @with_kw struct Options
     # generic parameters
-    method::Symbol       = :linesearch  # search method 
+    method::Symbol       = :linesearch  # search method
     maxiter::Int         = 10           # maximum newton iteration number
     io                   = stdout       # where to print stuff
     skipiter::Int        = 0            # skip iteration between displays
@@ -20,7 +20,7 @@ export Options
     ϵ::Float64           = 1e-6         # dt for finite difference approximation
                                        # of the derivative of the flow operator
     # line search parameters
-    ls_maxiter::Int      = 10           # maximum number of line search iterations 
+    ls_maxiter::Int      = 10           # maximum number of line search iterations
     ls_rho::Float64      = 0.5          # line search step reduction factor
 
     # GMRES parameters
