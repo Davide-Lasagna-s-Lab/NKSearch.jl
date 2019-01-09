@@ -75,7 +75,7 @@ function _search_hs!(G, L, S, D, z::MVector{X, N, NS},  opts) where {X, N, NS}
                                        dz_norm,      # total norm of correction
                                        e_norm,       # error norm after step
                                        rho,          # actual/predicted reduction ratio
-                                       tr_radius     # trust region radius after step
+                                       tr_radius,    # trust region radius after step
                                        res_err_norm) # GMRES residual error
 
         # tolerances reached
