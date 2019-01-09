@@ -1,12 +1,3 @@
-# ----------------------------------------------------------------- #
-# Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
-# ----------------------------------------------------------------- #
-
-using Test
-using NKSearch
-using LinearAlgebra
-
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 @testset "MVector - interface                   " begin
 
     a = MVector(([1, 2, 3], [4, 5, 6], [7, 8, 9]), 2.0, 4.0)
