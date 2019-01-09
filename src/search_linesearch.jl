@@ -57,8 +57,8 @@ function _search_linesearch!(G, L, S, D, z0::MVector{X, N, NS},  opts) where {X,
                                        res_err_norm) # GMRES residual error
 
         # tolerances reached
-        e_norm  < opts.e_tol && break # norm of error
-        δx_norm < opts.x_tol && break # norm of orbit correction
+         e_norm  < opts.e_norm_tol && break # norm of error
+        dz_norm < opts.dz_norm_tol && break # norm of orbit correction
     end
 
     # return input
