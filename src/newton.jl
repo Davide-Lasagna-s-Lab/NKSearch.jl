@@ -19,18 +19,18 @@ export search!
 # z0   : initial guess vector, gets overwritten
 # opts : search options (see src/options.jl)
 
-search!(G, L, S, F, dS, z0::MVector{X, N, 2}, opt::Options=Options()) where {X, N} =
-    _search!(G, L, S, (F, dS), z0, opt)
+search!(G, L, S, F, dS, z0::MVector{X, N, 2}, opts::Options=Options()) where {X, N} =
+    _search!(G, L, S, (F, dS), z0, opts)
 
 # when we do not have shifts
-search!(G, L, F, z0::MVector{X, N, 1}, opt::Options=Options()) where {X, N} =
-    _search!(G, L, nothing, (F, ), z0)
+search!(G, L, F, z0::MVector{X, N, 1}, opts::Options=Options()) where {X, N} =
+    _search!(G, L, nothing, (F, ), z0, opts)
 
 # dispatch to correct method
 function _search!(G, L, S, D, z0, opts)
-    if opt.method == :linesearch
+    if opts.method == :linesearch
         return _search_ls!(G, L, S, D, z0, opts)
-    elseif opt.method == :hookstep
+    elseif opts.method == :hookstep
         return _search_hs!(G, L, S, D, z0, opts)
     else
         throw(ArgumentError("method must be 'linesearch' or 'hookstep'"))
