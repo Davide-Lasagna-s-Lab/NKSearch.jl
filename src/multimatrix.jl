@@ -111,7 +111,7 @@ function update!(mm::MMatrix{X, N, NS},
     end
 
     # reset shifts
-    b.ds = zero.(b.ds)
+    b.d = zero.(b.d)
 
     return nothing
 end

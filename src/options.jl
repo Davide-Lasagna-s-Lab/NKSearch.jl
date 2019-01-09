@@ -15,7 +15,7 @@ export Options
     io                   = stdout       # where to print stuff
     skipiter::Int        = 0            # skip iteration between displays
     verbose::Bool        = true         # print iteration status
-    zx_norm_tol::Float64 = 1e-10        # tolerance on correction
+    dz_norm_tol::Float64 = 1e-10        # tolerance on correction
     e_norm_tol::Float64  = 1e-10        # tolerance on residual
     ϵ::Float64           = 1e-6         # dt for finite difference approximation
                                        # of the derivative of the flow operator
