@@ -19,7 +19,6 @@ function _search_ls!(G, L, S, D, z0::MVector{X, N, NS},  opts) where {X, N, NS}
     opts.verbose && display_status(opts.io,            # input/output channel
                                    0,                  # iteration number
                                    0,                  # total norm of correction
-                                   zero.(z0.d),        # shift correction
                                    z0.d,               # current shifts
                                    e_norm,             # error norm after step
                                    0.0,                # step length
@@ -44,14 +43,13 @@ function _search_ls!(G, L, S, D, z0::MVector{X, N, NS},  opts) where {X, N, NS}
         z0 .= λ.*b
 
         # correction norm
-        δx_norm = sum(norm(b[i])^2 for i = 1:N)
+        dz_norm = norm(b)
 
         # display status if verbose
         opts.verbose && display_status(opts.io,      # input/output channel
                                        iter,         # iteration number
-                                       δx_norm,      # total norm of correction
-                                       b.d,          # shift correction
-                                       z0.d,         # new shifts
+                                       dz_norm,      # total norm of correction
+                                       z0.d,         # new period
                                        e_norm,       # error norm after step
                                        λ,            # step length
                                        res_err_norm) # GMRES residual error

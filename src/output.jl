@@ -4,9 +4,9 @@
 using Printf
 
 # Display headers
-const _header_1 = "+------+----------+-----------+----------+----------+----------+----------+\n"*
-                  "| iter |   |δx|   |    δT     |    T     |    |e|   |     λ    |    res   |\n"*
-                  "+------+----------+-----------+----------+----------+----------+----------+\n"
+const _header_1 = "+------+----------+-----------+----------+----------+----------+\n"*
+                  "| iter |   |dz|   |     T     |    |e|   |     λ    |    res   |\n"*
+                  "+------+----------+-----------+----------+----------+----------+\n"
 
 const _header_2 = "+------+----------+-----------+-----------+----------+-----------+----------+----------+----------+\n"*
                   "| iter |   |δx|   |    δT     |    δs     |    T     |     s     |    |e|   |     λ    |    res   |\n"*
@@ -25,8 +25,8 @@ function display_status(io::IO, iter, δx_norm, δd::TUP2, d::TUP2, e_norm, λ, 
 end
 
 # print output when we don't
-function display_status(io::IO, iter, δx_norm, δT, T, e_norm, λ, res_err_norm) where {TUP2<:Tuple{Any, Any}}
-    str = @sprintf "|%4d  | %5.2e | %+5.2e | %5.2e | %5.2e | %5.2e | %5.2e |" iter δx_norm δT T e_norm λ res_err_norm
+function display_status(io::IO, iter, dz_norm, d::Tuple{Any}, e_norm, λ, res_err_norm)
+    str = @sprintf "|%4d  | %5.2e | %+5.2e | %5.2e | %5.2e | %5.2e |" iter dz_norm d[1] e_norm λ res_err_norm
     println(io, str)
     flush(io) 
     return nothing
