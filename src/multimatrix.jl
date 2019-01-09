@@ -6,22 +6,20 @@ import Flows
 
 # ~~~ Matrix Type ~~~
 struct MMatrix{X, N, NS, GType, LType, SType, DType}
-        G::GType         # flow operator with no shifts
-        L::LType         # linearised flow operator with no shifts
-        S::SType         # space shift operator (can be NoShift)
-        D::DType         # time (and space) derivative operator
-       xT::NTuple{N, X}  # time shifted conditions
-    dxTdT::NTuple{N, X}  # time derivative of flow operator
-       z0::MVector{X, N} # current orbit
-      tmp::X             # temporary storage
+        G::GType             # flow operator with no shifts
+        L::LType             # linearised flow operator with no shifts
+        S::SType             # space shift operator (can be NoShift)
+        D::DType             # time (and space) derivative operator
+       xT::NTuple{N, X}      # time shifted conditions
+    dxTdT::NTuple{N, X}      # time derivative of flow operator
+       z0::MVector{X, N, NS} # current orbit
+      tmp::X                 # temporary storage
+     opts::Options           # 
 end
 
 # Main outer constructor
-MMatrix(G, L, S, D, z0::MVector{X, N, NS}) where {X, N, NS} =
-    MMatrix(G, L, S, D,
-             ntuple(j->similar(z0[1]), N),
-             ntuple(j->similar(z0[1]), N),
-             z0, similar(z0[1]))
+MMatrix(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
+    MMatrix(G, L, S, D, similar.(z0.x), similar.(z0.x), z0, similar(z0[1]), opts)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(mm::MMatrix{X}, δz::MVector{X}) where {X} = mul!(similar(δz), mm, δz)
@@ -40,7 +38,7 @@ function mul!(out::MVector{X, N, NS},
     tmp   = mm.tmp
     dxTdT = mm.dxTdT
     T     = mm.z0.d[1]
-    ϵ     = opts.ϵ
+    ϵ     = mm.opts.ϵ
 
     # compute L{x0[i]}⋅δz[i] - δz[i+1]
     for i = 1:N

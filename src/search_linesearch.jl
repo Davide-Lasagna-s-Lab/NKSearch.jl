@@ -8,9 +8,9 @@ function _search_ls!(G, L, S, D, z0::MVector{X, N, NS},  opts) where {X, N, NS}
     opts.verbose && display_header(opts.io, z0)
 
     # allocate memory
-    b   = similar(z0)              # right hand side
-    tmp = similar(z0[1])           # temporary
-    A   = MMatrix(G, L, S, D, z0)  # Newton update equation matrix operator
+    b   = similar(z0)                   # right hand side
+    tmp = similar(z0[1])                # temporary
+    A   = MMatrix(G, L, S, D, z0, opts) # Newton update equation matrix operator
 
     # calculate initial error
     e_norm = e_norm_λ(G, S, z0, z0, 0.0, tmp)
