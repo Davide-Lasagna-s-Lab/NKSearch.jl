@@ -2,6 +2,8 @@
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
 
+import LinearAlgebra: norm
+
 # line search method implementation
 function _search_ls!(G, L, S, D, z0::MVector{X, N, NS},  opts) where {X, N, NS}
     # display nice header
