@@ -11,5 +11,6 @@ include("output.jl")
 include("linesearch.jl")
 include("newton.jl")
 include("search_linesearch.jl")
+include("search_hookstep.jl")
 
 end
