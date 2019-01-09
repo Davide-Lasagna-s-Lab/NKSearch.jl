@@ -10,5 +10,6 @@ include("multimatrix.jl")
 include("output.jl")
 include("linesearch.jl")
 include("newton.jl")
+include("search_linesearch.jl")
 
 end
