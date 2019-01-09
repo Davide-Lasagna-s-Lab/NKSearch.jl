@@ -29,9 +29,9 @@ search!(G, L, F, z0::MVector{X, N, 1}, opts::Options=Options()) where {X, N} =
 # dispatch to correct method
 function _search!(G, L, S, D, z0, opts)
     if opts.method == :linesearch
-        return _search_ls!(G, L, S, D, z0, opts)
+        return _search_linesearch!(G, L, S, D, z0, opts)
     elseif opts.method == :hookstep
-        return _search_hs!(G, L, S, D, z0, opts)
+        return _search_hookstep!(G, L, S, D, z0, opts)
     else
         throw(ArgumentError("method must be 'linesearch' or 'hookstep'"))
     end

@@ -5,7 +5,7 @@
 import LinearAlgebra: norm
 
 # line search method implementation
-function _search_ls!(G, L, S, D, z0::MVector{X, N, NS},  opts) where {X, N, NS}
+function _search_linesearch!(G, L, S, D, z0::MVector{X, N, NS},  opts) where {X, N, NS}
     # display nice header
     opts.verbose && display_header(opts.io, z0)
 
