@@ -6,7 +6,7 @@ import LinearAlgebra: dot
 import Flows
 
 # ~~~ Matrix Type ~~~
-mutable struct MMatrix{X, N, NS, GType, LType, SType, DType}
+mutable struct IterSolCache{X, N, NS, GType, LType, SType, DType}
         G::GType             # flow operator with no shifts
         L::LType             # linearised flow operator with no shifts
         S::SType             # space shift operator (can be NoShift)
@@ -19,15 +19,15 @@ mutable struct MMatrix{X, N, NS, GType, LType, SType, DType}
 end
 
 # Main outer constructor
-MMatrix(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
-    MMatrix(G, L, S, D, similar.(z0.x), similar.(z0.x), similar(z0), similar(z0[1]), opts)
+IterSolCache(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
+    IterSolCache(G, L, S, D, similar.(z0.x), similar.(z0.x), similar(z0), similar(z0[1]), opts)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
-Base.:*(mm::MMatrix{X}, δz::MVector{X}) where {X} = mul!(similar(δz), mm, δz)
+Base.:*(mm::IterSolCache{X}, δz::MVector{X}) where {X} = mul!(similar(δz), mm, δz)
 
 # Compute mat-vec product
 function mul!(out::MVector{X, N, NS},
-               mm::MMatrix{X, N, NS},
+               mm::IterSolCache{X, N, NS},
                δz::MVector{X, N, NS}) where {X, N, NS}
     # aliases
     xT    = mm.xT
@@ -74,7 +74,7 @@ function mul!(out::MVector{X, N, NS},
 end
 
 # Update the linear operator and rhs arising in the Newton-Raphson iterations
-function update!(mm::MMatrix{X, N, NS},
+function update!(mm::IterSolCache{X, N, NS},
                   b::MVector{X, N, NS},
                  z0::MVector{X, N, NS},
                opts::Options) where {X, N, NS}
@@ -119,3 +119,9 @@ function update!(mm::MMatrix{X, N, NS},
 
     return nothing
 end
+
+# solution for iterative method
+_solve(A::IterSolCache, b::MVector, opts::Options) =
+    GMRES.gmres!(A, b, opts.gmres_rtol,
+                       opts.gmres_maxiter,
+                       opts.gmres_verbose)

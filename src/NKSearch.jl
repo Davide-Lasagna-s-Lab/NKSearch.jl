@@ -4,9 +4,15 @@
 
 module NKSearch
 
+# UTILS
+
+# global row indices of the i-th nxn block (one-based)
+@inline _blockrng(i::Integer, n::Integer) = ((i-1)*n+1):(i*n)
+
 include("options.jl")
 include("multivector.jl")
-include("multimatrix.jl")
+include("iter_sol_cache.jl")
+include("direct_sol_cache.jl")
 include("output.jl")
 include("linesearch.jl")
 include("newton.jl")

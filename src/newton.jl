@@ -28,9 +28,12 @@ search!(G, L, F, z0::MVector{X, N, 1}, opts::Options=Options()) where {X, N} =
 
 # dispatch to correct method
 function _search!(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
-    if    opts.method == :linesearch
-        A = MMatrix(G, L, S, D, z0, opts)
-        return _search_linesearch!(G, L, S, D, z0, A, opts)
+    if    opts.method == :linesearch_iter
+        cache = IterSolCache(G, L, S, D, z0, opts)
+        return _search_linesearch!(G, L, S, D, z0, cache, opts)
+    elseif opts.method == :linesearch_direct
+        cache = DirectSolCache(G, L, S, D, z0, opts)
+        return _search_linesearch!(G, L, S, D, z0, cache, opts)
     elseif opts.method == :hookstep
         return _search_hookstep!(G, L, S, D, z0, opts)
     else

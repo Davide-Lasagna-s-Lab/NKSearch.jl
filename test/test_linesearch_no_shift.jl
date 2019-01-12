@@ -53,21 +53,25 @@ end
              RK4(couple(zeros(2), zeros(2)), :NORMAL),
              TimeStepConstant(1e-3))
 
-    # define initial guess, a slightly perturbed orbit
-    z = MVector(([1.01, 0.01], [-1.01, 0.01]), 1.01*2π)
+    for method in (:linesearch_iter, :linesearch_direct)
 
-    # search
-    search!(G,
-            L,
-            (dxdt, x)->F(0, x, dxdt),
-            z,
-            Options(maxiter=15,
-                    dz_norm_tol=1e-16,
-                    gmres_verbose=false,
-                    e_norm_tol=1e-16,
-                    verbose=false))
+        # define initial guess, a slightly perturbed orbit
+        z = MVector(([1.01, 0.01], [-1.01, 0.01]), 1.01*2π)
 
-    # solution is a loop of unit radius and with T = 2π
-    @test maximum( map(el->norm(el)-1, z.x) ) < 1e-10
-    @test abs(z.d[1] - 2π ) < 1e-10
+        # search
+        search!(G,
+                L,
+                (dxdt, x)->F(0, x, dxdt),
+                z,
+                Options(maxiter=15,
+                        dz_norm_tol=1e-16,
+                        gmres_verbose=false,
+                        e_norm_tol=1e-16,
+                        verbose=false,
+                        method=method))
+
+        # solution is a loop of unit radius and with T = 2π
+        @test maximum( map(el->norm(el)-1, z.x) ) < 1e-10
+        @test abs(z.d[1] - 2π ) < 1e-10
+    end
 end

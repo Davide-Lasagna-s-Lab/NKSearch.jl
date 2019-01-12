@@ -1,4 +1,4 @@
-@testset "MVector - interface                   " begin
+@testset "MVector - interface                    " begin
 
     a = MVector(([1, 2, 3], [4, 5, 6], [7, 8, 9]), 2.0, 4.0)
     b = copy(a)
@@ -12,7 +12,7 @@
     @test b.d  == (2.0, 4.0)
 end
 
-@testset "MVector - dot and norm                " begin
+@testset "MVector - dot and norm                 " begin
     # single seed
     a = MVector(([1, 2, 3], [4, 5, 6], [7, 8, 9]), 2.0, 4.0)
     b = MVector(([1, 2, 5], [4, 5, 7], [7, 8, 1]), 3.0, 1.0)
@@ -26,7 +26,7 @@ end
     @test alloc(a, b) == 0
 end
 
-@testset "MVector - broadcast                   " begin
+@testset "MVector - broadcast                    " begin
     a = MVector(([1, 2, 3], [4, 5, 6], [7, 8, 9]), 1.0, 4.0)
     b = MVector(([1, 2, 5], [4, 5, 7], [7, 8, 1]), 3.0, 1.0)
 
@@ -37,7 +37,7 @@ end
     @test a.d    == (4, 5)
 end
 
-@testset "MVector - broadcast allocation        " begin
+@testset "MVector - broadcast allocation         " begin
     a = MVector(([1, 2, 3], [4, 5, 6], [7, 8, 9]), 1.0, 4.0)
     b = MVector(([1, 2, 5], [4, 5, 7], [7, 8, 1]), 3.0, 1.0)
     c = 1

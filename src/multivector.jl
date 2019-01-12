@@ -41,6 +41,27 @@ Base.BroadcastStyle(::Broadcast.ArrayStyle{MVector},
 Base.BroadcastStyle(::Broadcast.DefaultArrayStyle{1},
                     ::Broadcast.ArrayStyle{MVector}) = Broadcast.DefaultArrayStyle{1}()
 
+# "Linearise" the data structure into a single Float64 vector
+function toarray(z::MVector{X, N, NS}) where {X, N, NS}
+    n = length(z[1])
+    out = zeros(N*n + NS)
+    for i = 1:N
+        out[_blockrng(i, n)] .= z[i]
+    end
+    out[end - NS + 1 : end] .= z.d
+    return out
+end
+
+# Copy the data in the vector v into a tuple of object structure of MVector
+function fromarray!(out::MVector{X, N, NS}, v::Vector{<:Real}) where {X, N, NS}
+    n = length(out[1])
+    for i = 1:N
+        out[i] .= view(v, _blockrng(i, n))
+    end
+    out.d = ntuple(j->v[end-j+1], NS)
+    return out
+end
+
 # a hack really!
 Base.size(z::MVector{X, N, NS}) where {X, N, NS} = (NS + N*length(z.x[1]), )
 
