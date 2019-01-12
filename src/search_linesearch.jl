@@ -3,12 +3,6 @@
 # ----------------------------------------------------------------- #
 
 import LinearAlgebra: norm
-# solution for iterative method
-_solve(A::MMatrix, b::MVector, opts::Options) =
-    GMRES.gmres!(A, b, opts.gmres_rtol,
-                       opts.gmres_maxiter,
-                       opts.gmres_verbose)
-
 
 # line search method implementation
 function _search_linesearch!(G, L, S, D, z0, A, opts)
