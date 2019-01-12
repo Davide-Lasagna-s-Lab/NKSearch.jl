@@ -6,7 +6,7 @@ import LinearAlgebra: dot
 import Flows
 
 # ~~~ Matrix Type ~~~
-struct MMatrix{X, N, NS, GType, LType, SType, DType}
+mutable struct MMatrix{X, N, NS, GType, LType, SType, DType}
         G::GType             # flow operator with no shifts
         L::LType             # linearised flow operator with no shifts
         S::SType             # space shift operator (can be NoShift)
@@ -20,7 +20,7 @@ end
 
 # Main outer constructor
 MMatrix(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
-    MMatrix(G, L, S, D, similar.(z0.x), similar.(z0.x), z0, similar(z0[1]), opts)
+    MMatrix(G, L, S, D, similar.(z0.x), similar.(z0.x), similar(z0), similar(z0[1]), opts)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(mm::MMatrix{X}, δz::MVector{X}) where {X} = mul!(similar(δz), mm, δz)
@@ -76,17 +76,20 @@ end
 # Update the linear operator and rhs arising in the Newton-Raphson iterations
 function update!(mm::MMatrix{X, N, NS},
                   b::MVector{X, N, NS},
+                 z0::MVector{X, N, NS},
                opts::Options) where {X, N, NS}
+
+    # store this vector for the products
+    mm.z0 .= z0
 
     # aliases
     xT    = mm.xT
     G     = mm.G
     S     = mm.S
-    z0    = mm.z0
     tmp   = mm.tmp
     dxTdT = mm.dxTdT
     ϵ     = opts.ϵ
-    T     = mm.z0.d[1]
+    T     = z0.d[1]
 
     # update initial and final states
     for i = 1:N
