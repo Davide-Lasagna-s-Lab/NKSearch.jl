@@ -55,28 +55,28 @@ end
 
     # for method in (:linesearch,)
         # for solver in (:direct, :iterative)
-    for method in (:hookstep,)
-        for solver in (:direct,)
-            # define initial guess, a slightly perturbed orbit
-            z = MVector(([2, 0.0], [-2, 0.0]), 2π)
+    for (method, solver) in ((:hookstep,   :direct),
+                             (:linesearch, :direct),
+                             (:linesearch, :iterative))
+        # define initial guess, a slightly perturbed orbit
+        z = MVector(([2, 0.0], [-2, 0.0]), 2π)
 
-            # search
-            search!(G,
-                    L,
-                    (dxdt, x)->F(0, x, dxdt),
-                    z,
-                    Options(maxiter=15,
-                            dz_norm_tol=1e-16,
-                            gmres_verbose=false,
-                            e_norm_tol=1e-16,
-                            verbose=true,
-                            tr_radius_init=1,
-                            method=method,
-                            solver=solver))
+        # search
+        search!(G,
+                L,
+                (dxdt, x)->F(0, x, dxdt),
+                z,
+                Options(maxiter=15,
+                        dz_norm_tol=1e-16,
+                        gmres_verbose=false,
+                        e_norm_tol=1e-16,
+                        verbose=false,
+                        tr_radius_init=1,
+                        method=method,
+                        solver=solver))
 
-            # solution is a loop of unit radius and with T = 2π
-            # @test maximum( map(el->norm(el)-1, z.x) ) < 1e-10
-            # @test abs(z.d[1] - 2π ) < 1e-10
-        end
+        # solution is a loop of unit radius and with T = 2π
+        @test maximum( map(el->norm(el)-1, z.x) ) < 1e-10
+        @test abs(z.d[1] - 2π ) < 1e-10
     end
 end
