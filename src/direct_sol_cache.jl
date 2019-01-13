@@ -96,4 +96,4 @@ end
 
 # solution for direct method
 _solve(dsm::DirectSolCache, b::MVector, opts::Options) =
-    (fromarray!(b, ldiv!(lu(dsm.A), toarray(b))), 0.0)
+    (fromvector!(b, ldiv!(lu(dsm.A), tovector(b))), 0.0)

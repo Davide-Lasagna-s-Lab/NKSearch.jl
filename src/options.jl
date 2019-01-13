@@ -14,7 +14,7 @@ export Options
     solver::Symbol       = :direct      # solution metho
     maxiter::Int         = 10           # maximum newton iteration number
     io                   = stdout       # where to print stuff
-    skipiter::Int        = 0            # skip iteration between displays
+    skipiter::Int        = 1            # skip iteration between displays
     verbose::Bool        = true         # print iteration status
     dz_norm_tol::Float64 = 1e-10        # tolerance on correction
     e_norm_tol::Float64  = 1e-10        # tolerance on residual
@@ -36,4 +36,5 @@ export Options
 
     @assert method in (:linesearch, :hookstep)
     @assert solver in (:direct, :iterative)
+    @assert skipiter > 0
 end
