@@ -14,10 +14,8 @@ include("multivector.jl")
 include("iter_sol_cache.jl")
 include("direct_sol_cache.jl")
 include("output.jl")
-include("linesearch.jl")
 include("newton.jl")
 include("search_linesearch.jl")
-include("trust_region.jl")
-include("search_hookstep.jl")
+include("search_trustregion.jl")
 
 end

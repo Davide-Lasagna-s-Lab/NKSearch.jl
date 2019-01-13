@@ -2,7 +2,7 @@
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
 import LinearAlgebra: dot
-
+import GMRES: gmres!
 import Flows
 
 # ~~~ Matrix Type ~~~
@@ -122,6 +122,6 @@ end
 
 # solution for iterative method
 _solve(A::IterSolCache, b::MVector, opts::Options) =
-    GMRES.gmres!(A, b, opts.gmres_rtol,
-                       opts.gmres_maxiter,
-                       opts.gmres_verbose)
+    gmres!(A, b, opts.gmres_rtol,
+                 opts.gmres_maxiter,
+                 opts.gmres_verbose)
