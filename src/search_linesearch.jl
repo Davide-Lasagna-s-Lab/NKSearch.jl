@@ -7,7 +7,7 @@ import LinearAlgebra: norm
 # line search method implementation
 function _search_linesearch!(G, L, S, D, z0, A, opts)
     # display nice header
-    opts.verbose && display_header(opts.io, z0)
+    opts.verbose && display_header_ls(opts.io, z0)
 
     # allocate memory
     b   = similar(z0)                   # right hand side
@@ -17,13 +17,13 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
     e_norm = e_norm_λ(G, S, z0, z0, 0.0, tmp)
 
     # display status if verbose
-    opts.verbose && display_status(opts.io, # input/output channel
-                                   0,       # iteration number
-                                   0,       # total norm of correction
-                                   z0.d,    # current shifts
-                                   e_norm,  # error norm after step
-                                   0.0,     # step length
-                                   0.0)     # GMRES residual norm
+    opts.verbose && display_status_ls(opts.io,
+                                      0,
+                                      0,
+                                      z0.d,
+                                      e_norm,
+                                      0.0,
+                                      0.0)
 
     # newton iterations loop
     for iter = 1:opts.maxiter
@@ -44,13 +44,13 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
         dz_norm = norm(b)
 
         # display status if verbose
-        opts.verbose && display_status(opts.io,      # input/output channel
-                                       iter,         # iteration number
-                                       dz_norm,      # total norm of correction
-                                       z0.d,         # new period
-                                       e_norm,       # error norm after step
-                                       λ,            # step length
-                                       res_err_norm) # GMRES residual error
+        opts.verbose && display_status_ls(opts.io,
+                                          iter,
+                                          dz_norm,
+                                          z0.d,
+                                          e_norm,
+                                          λ,
+                                          res_err_norm)
 
         # tolerances reached
          e_norm  < opts.e_norm_tol && break # norm of error
