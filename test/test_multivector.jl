@@ -10,6 +10,14 @@
     @test b[2] == [4, 5, 6]
     @test b[3] == [7, 8, 9]
     @test b.d  == (2.0, 4.0)
+
+    c = tovector(a)
+    @test c == [1, 2, 3, 4, 5, 6, 7, 8, 9, 2, 4]
+    d = fromvector!(similar(a), c)
+    @test d[1] == [1, 2, 3]
+    @test d[2] == [4, 5, 6]
+    @test d[3] == [7, 8, 9]
+    @test d.d  == (2.0, 4.0)
 end
 
 @testset "MVector - dot and norm                 " begin
