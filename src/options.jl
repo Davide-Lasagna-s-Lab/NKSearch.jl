@@ -30,8 +30,9 @@ export Options
     gmres_rtol::Float64  = 1e-3         # GMRES relative stopping tolerance
 
     # trust_region algorithm parameters
+    min_step::Float64       = 1e-4   # 
     tr_radius_init::Float64 = 1        # initial trust region radius
-    tr_radius_max::Float64 = 10^8      # maximum trust region radius
+    tr_radius_max::Float64  = 10^8      # maximum trust region radius
     eta::Float64 = 0.25                # maximum trust region radius
 
     @assert method in (:linesearch, :hookstep)
