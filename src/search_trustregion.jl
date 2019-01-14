@@ -30,6 +30,8 @@ function _search_hookstep!(G, L, S, D, z, cache, opts)
                                       tr_radius,
                                       0)
 
+    status = :maxiter_reached
+
     # newton iterations loop
     for iter = 1:opts.maxiter
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -51,7 +53,7 @@ function _search_hookstep!(G, L, S, D, z, cache, opts)
         # calc ratio
         rho = actual/predicted
 
-        if e_norm_curr > 1e-6
+        if e_norm_curr > 1e-7
             # trust region update
             if rho < 1/4
                 tr_radius *= 1/4
@@ -86,12 +88,22 @@ function _search_hookstep!(G, L, S, D, z, cache, opts)
         end
 
         # tolerances reached
-         e_norm <  opts.e_norm_tol && break
-        dz_norm < opts.dz_norm_tol && break
+        if e_norm <  opts.e_norm_tol
+            status = :converged
+            break
+        end
+        if dz_norm < opts.dz_norm_tol
+            status = :converged
+            break
+        end
+        if step < opts.min_step
+            status = :min_step_reached
+            break
+        end
     end
 
     # return input
-    return z
+    return status
 end
 
 function solve_tr_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
