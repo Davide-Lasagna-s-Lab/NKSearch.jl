@@ -3,6 +3,7 @@
 # ----------------------------------------------------------------- #
 
 import LinearAlgebra
+import HDF5: write, h5open, h5readattr, attrs
 
 export MVector
 
@@ -79,4 +80,18 @@ _get_d(z) = z
     end
     dest.d = Broadcast.broadcast(bcf.f, map(_get_d, bcf.args)...)
     return dest
+end
+
+function save(z::MVector{X, N, NS}, path::String) where {X, N, NS}
+    # save trajectory to a large matrix first
+    data = zeros(Float64, length(z[1]), N)
+    for (i, zi) in enumerate(z.x)
+        data[:, i] .= zi
+    end
+    h5open(path, "w") do file
+        write(file, "seed", data)
+        for i = 1:NS
+            attrs(file)["d$i"] = z.d[i]
+        end
+    end
 end
