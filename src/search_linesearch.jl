@@ -45,13 +45,15 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
         dz_norm = norm(b)
 
         # display status if verbose
-        opts.verbose && display_status_ls(opts.io,
-                                          iter,
-                                          dz_norm,
-                                          z0.d,
-                                          e_norm,
-                                          λ,
-                                          res_err_norm)
+        if opts.verbose && iter % opts.skipiter == 0
+            display_status_ls(opts.io,
+                              iter,
+                              dz_norm,
+                              z0.d,
+                              e_norm,
+                              λ,
+                              res_err_norm)
+        end
 
         # tolerances reached
          e_norm  < opts.e_norm_tol && break # norm of error
