@@ -5,7 +5,7 @@
 import LinearAlgebra
 import HDF5: write, h5open, h5readattr, attrs
 
-export MVector
+export MVector, tovector, fromvector!
 
 # ~~~ INTERFACE FOR MVector and MMatrix ~~~
 # The type parameter `X` must support
