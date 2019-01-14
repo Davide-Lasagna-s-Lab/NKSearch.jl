@@ -59,7 +59,7 @@ function fromvector!(out::MVector{X, N, NS}, v::Vector{<:Real}) where {X, N, NS}
     for i = 1:N
         out[i] .= view(v, _blockrng(i, n))
     end
-    out.d = ntuple(j->v[end-j+1], NS)
+    out.d = ntuple(j->v[end-NS+j], NS)
     return out
 end
 
