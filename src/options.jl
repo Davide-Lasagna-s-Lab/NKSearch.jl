@@ -10,8 +10,7 @@ export Options
 
 @with_kw struct Options
     # generic parameters
-    method::Symbol       = :linesearch  # search method
-    solver::Symbol       = :direct      # solution metho
+    method::Symbol       = :ls_direct   # search method
     maxiter::Int         = 10           # maximum newton iteration number
     io                   = stdout       # where to print stuff
     skipiter::Int        = 1            # skip iteration between displays
@@ -31,11 +30,10 @@ export Options
 
     # trust_region algorithm parameters
     min_step::Float64       = 1e-4   # 
-    tr_radius_init::Float64 = 1        # initial trust region radius
+    tr_radius_init::Float64 = 1         # initial trust region radius
     tr_radius_max::Float64  = 10^8      # maximum trust region radius
-    eta::Float64 = 0.25                # maximum trust region radius
+    eta::Float64 = 0.25                 # maximum trust region radius
 
-    @assert method in (:linesearch, :hookstep)
-    @assert solver in (:direct, :iterative)
+    @assert method in (:ls_direct, :ls_iterative, :tr_direct, :hookstep)
     @assert skipiter > 0
 end

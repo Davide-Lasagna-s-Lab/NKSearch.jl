@@ -26,11 +26,15 @@ search!(G, L, F, z0::MVector{X, N, 1}, opts::Options=Options()) where {X, N} =
 
 # dispatch to correct method
 function _search!(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
-    cache = (opts.solver == :iterative
-             ? IterSolCache(G, L, S, D, z0, opts)
-             : DirectSolCache(G, L, S, D, z0, opts))
 
-    return (opts.method == :linesearch
-            ? _search_linesearch!(G, L, S, D, z0, cache, opts)
-            : _search_hookstep!(G, L, S, D, z0, cache, opts))
+    return (  opts.method == :ls_direct
+            ? _search_linesearch!(G, L, S, D, z0, DirectSolCache(G, L, S, D, z0, opts), opts)
+            : opts.method == :ls_iterative
+            ? _search_linesearch!(G, L, S, D, z0, IterSolCache(G, L, S, D, z0, opts), opts)
+            : opts.method == :tr_direct
+            ? _search_trustregion!(G, L, S, D, z0, DirectSolCache(G, L, S, D, z0, opts), opts)
+            # : opts.method == :hookstep
+            # ? _search_hookstep!(G, L, S, D, z0, IterSolCache(G, L, S, D, z0, opts), opts)
+            : throw(ArgumentError("panic!")))
+
 end

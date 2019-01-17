@@ -53,11 +53,9 @@ end
              RK4(couple(zeros(2), zeros(2)), :NORMAL),
              TimeStepConstant(1e-3))
 
-    # for method in (:linesearch,)
-        # for solver in (:direct, :iterative)
-    for (method, solver) in ((:hookstep,   :direct),
-                             (:linesearch, :direct),
-                             (:linesearch, :iterative))
+    for method in (:tr_direct,
+                   :ls_direct,
+                   :ls_iterative)
         # define initial guess, a slightly perturbed orbit
         z = MVector(([2, 0.0], [-2, 0.0]), 2π)
 
@@ -72,8 +70,7 @@ end
                         e_norm_tol=1e-16,
                         verbose=false,
                         tr_radius_init=1,
-                        method=method,
-                        solver=solver))
+                        method=method))
 
         # solution is a loop of unit radius and with T = 2π
         @test maximum( map(el->norm(el)-1, z.x) ) < 1e-10

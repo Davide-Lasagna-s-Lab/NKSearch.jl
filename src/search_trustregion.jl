@@ -5,7 +5,7 @@
 using Printf
 
 # line search method implementation
-function _search_hookstep!(G, L, S, D, z, cache, opts)
+function _search_trustregion!(G, L, S, D, z, cache, opts)
     # display nice header
     opts.verbose && display_header_tr(opts.io, z)
 

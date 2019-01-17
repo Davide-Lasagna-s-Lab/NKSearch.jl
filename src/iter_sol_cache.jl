@@ -122,6 +122,6 @@ end
 
 # solution for iterative method
 _solve(A::IterSolCache, b::MVector, opts::Options) =
-    gmres!(A, b, opts.gmres_rtol,
-                 opts.gmres_maxiter,
-                 opts.gmres_verbose)
+    gmres!(A, b; rtol=opts.gmres_rtol,
+                 maxiter=opts.gmres_maxiter,
+                 verbose=opts.gmres_verbose)
