@@ -45,6 +45,9 @@ function DirectSolCache(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS
                    ntuple(i->similar(z0.x[1]), 2))
 end
 
+Base.:*(dsm::DirectSolCache{X}, dz::MVector{X}) where {X} = 
+    fromvector!(similar(dz), dsm.A*tovector(dz))
+
 function update!(dsm::DirectSolCache,
                    b::MVector{X, N, NS},
                   z0::MVector{X, N, NS},

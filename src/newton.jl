@@ -33,8 +33,8 @@ function _search!(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
             ? _search_linesearch!(G, L, S, D, z0, IterSolCache(G, L, S, D, z0, opts), opts)
             : opts.method == :tr_direct
             ? _search_trustregion!(G, L, S, D, z0, DirectSolCache(G, L, S, D, z0, opts), opts)
-            # : opts.method == :hookstep
-            # ? _search_hookstep!(G, L, S, D, z0, IterSolCache(G, L, S, D, z0, opts), opts)
+            : opts.method == :tr_iterative
+            ? _search_trustregion!(G, L, S, D, z0, IterSolCache(G, L, S, D, z0, opts), opts)
             : throw(ArgumentError("panic!")))
 
 end

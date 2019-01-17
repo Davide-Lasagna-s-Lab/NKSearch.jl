@@ -4,7 +4,7 @@
 
 using Printf
 
-# line search method implementation
+# trust region method implementation
 function _search_trustregion!(G, L, S, D, z, cache, opts)
     # display nice header
     opts.verbose && display_header_tr(opts.io, z)
@@ -48,7 +48,7 @@ function _search_trustregion!(G, L, S, D, z, cache, opts)
         actual = e_norm_curr - e_norm_next
 
         # calc predicted reduction
-        predicted = norm(fromvector!(b, cache.A*tovector(dz)))^2
+        predicted = norm(cache * dz)^2
 
         # calc ratio
         rho = actual/predicted
@@ -106,8 +106,35 @@ function _search_trustregion!(G, L, S, D, z, cache, opts)
     return status
 end
 
+# Solve the Trust Region optimisation subproblem
 function solve_tr_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
 
+    if opts.method == :tr_direct
+        return solve_dogleg_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+    end
+
+    if opts.method == :tr_iterative
+        return solve_hookstep_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+    end
+
+    # this should not happen as we restrict the method in the Options struct
+    throw(ArgumentError("panic!"))
+end
+
+function solve_hookstep_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+    
+    # solve optimisation problem (this is always using GMRES)
+    dz, res_err_norm = _solve(cache, dz, tr_radius, opts)
+
+    if norm(dz) < tr_radius
+        return false, :newton, 1.0
+    else 
+        return true,  :hkstep, tr_radius
+    end
+end
+
+function solve_dogleg_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+    
     # ~~~ GET NEWTON STEP ~~~
     dz_N, res_err_norm = _solve(cache, copy(dz), opts)
 

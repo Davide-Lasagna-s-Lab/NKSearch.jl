@@ -125,3 +125,8 @@ _solve(A::IterSolCache, b::MVector, opts::Options) =
     gmres!(A, b; rtol=opts.gmres_rtol,
                  maxiter=opts.gmres_maxiter,
                  verbose=opts.gmres_verbose)
+
+_solve(A::IterSolCache, b::MVector, tr_radius::Real, opts::Options) =
+    gmres!(A, b, tr_radius; rtol=opts.gmres_rtol,
+                            maxiter=opts.gmres_maxiter,
+                            verbose=opts.gmres_verbose)

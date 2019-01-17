@@ -34,6 +34,6 @@ export Options
     tr_radius_max::Float64  = 10^8      # maximum trust region radius
     eta::Float64 = 0.25                 # maximum trust region radius
 
-    @assert method in (:ls_direct, :ls_iterative, :tr_direct, :hookstep)
+    @assert method in (:tr_direct, :ls_direct, :ls_iterative, :tr_iterative)
     @assert skipiter > 0
 end

@@ -55,7 +55,8 @@ end
 
     for method in (:tr_direct,
                    :ls_direct,
-                   :ls_iterative)
+                   :ls_iterative,
+                   :tr_iterative)
         # define initial guess, a slightly perturbed orbit
         z = MVector(([2, 0.0], [-2, 0.0]), 2π)
 
@@ -68,12 +69,13 @@ end
                         dz_norm_tol=1e-16,
                         gmres_verbose=false,
                         e_norm_tol=1e-16,
+                        gmres_maxiter=4,
                         verbose=false,
-                        tr_radius_init=1,
+                        tr_radius_init=0.001,
                         method=method))
 
         # solution is a loop of unit radius and with T = 2π
-        @test maximum( map(el->norm(el)-1, z.x) ) < 1e-10
-        @test abs(z.d[1] - 2π ) < 1e-10
+        @test maximum( map(el->norm(el)-1, z.x) ) < 1e-9
+        @test abs(z.d[1] - 2π ) < 1e-9
     end
 end
