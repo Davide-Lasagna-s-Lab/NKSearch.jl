@@ -53,3 +53,21 @@ end
     alloc(a, b, c, d) = (@allocated a .+= b .* 2.0 .+ 3.0.*a)
     @test alloc(a, b, c, d) == 0
 end
+
+@testset "MVector - io                           " begin
+    a = MVector(([1, 2, 3], [4, 5, 6], [7, 8, 9]), 1.0, 4.0)
+    dt = 2.0
+    
+    # first save
+    save_seed(a, "test.file", Dict("dt"=>dt))
+    
+    # then load
+    b, dict = load_seed!(similar(a), "test.file")
+
+    @test b[1] == [1, 2, 3]
+    @test b[2] == [4, 5, 6]
+    @test b[3] == [7, 8, 9]
+    @test b.d == (1.0, 4.0)
+    @test length(keys(dict)) == 1
+    @test dict["dt"] == 2.0
+end

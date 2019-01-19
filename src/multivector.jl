@@ -5,7 +5,7 @@
 import LinearAlgebra
 import HDF5: write, h5open, h5readattr, attrs
 
-export MVector, tovector, fromvector!
+export MVector, tovector, fromvector!, save_seed, load_seed!
 
 # ~~~ INTERFACE FOR MVector and MMatrix ~~~
 # The type parameter `X` must support
@@ -94,4 +94,51 @@ function save(z::MVector{X, N, NS}, path::String) where {X, N, NS}
             attrs(file)["d$i"] = z.d[i]
         end
     end
+end
+
+# save MVector to file, including other 
+function save_seed(z::MVector{X, N, NS},
+                path::String,
+               other::Dict{String, <:Any}) where {X, N, NS}
+    h5open(path, "w") do file
+        for i = 1:N
+            write(file, "seed_$i", parent(z.x[i]))
+        end
+        for i = 1:NS
+            attrs(file)["d$i"] = z.d[i]
+        end
+        for (k, v) in other
+            attrs(file)["other_$k"] = v
+        end
+    end
+end
+
+# load data into z and return a NamedTuple of other attributes that were stored
+function load_seed!(z::MVector{X, N, NS},
+                 path::String) where {X, N, NS}
+
+    # load bit here
+    dict = Dict{String, Any}()
+
+    h5open(path, "r") do file
+        # read the seeds
+        for i = 1:N
+            parent(z.x[i]) .= read(file, "seed_$i")
+        end
+
+        # read attributes
+        attributes = attrs(file)
+        
+        # and period and shifts
+        z.d = tuple([read(attributes, "d$i") for i = 1:NS]...)
+
+        # also load other bits that might have been saved
+        for k in names(attributes)
+            if startswith(k, "other_")
+                dict[k[7:end]] = read(attributes, k)
+            end
+        end
+    end
+
+    return z, dict
 end
