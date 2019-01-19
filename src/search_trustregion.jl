@@ -126,7 +126,14 @@ function solve_hookstep_subproblem!(dz::MVector, z::MVector, cache, tr_radius::R
     # solve optimisation problem (this is always using GMRES)
     dz, res_err_norm = _solve(cache, dz, tr_radius, opts)
 
-    if norm(dz) < tr_radius
+    # we consider a newton step only if we are within the trust region
+    # and we have managed to reduce the error at least as much as required
+    # by the gmres stopping tolerance. If the trust region is small, it might
+    # not be possible to make res_err_norm smaller than required, regardless
+    # of the number of iterations. This is a symptom of the fact that
+    # the GMRES solution is affected by the trust region size and we can thus 
+    # use this info to decide whether we want to increase or decrease it.
+    if norm(dz) < tr_radius && res_err_norm <= opts.gmres_rtol
         return false, :newton, 1.0
     else 
         return true,  :hkstep, tr_radius
