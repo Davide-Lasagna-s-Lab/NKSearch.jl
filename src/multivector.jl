@@ -121,13 +121,22 @@ function load_seed!(z::MVector{X, N, NS},
     dict = Dict{String, Any}()
 
     h5open(path, "r") do file
+
+        # load attributes hendle
+        attributes = attrs(file)
+
+        # checks
+        N == length(names(file)) ||
+            throw(ArgumentError("inconsistent number of seeds"))
+
+        NS == length([read(attributes, el) 
+                      for el in names(attributes) if startswith(el, "d")]) ||
+            throw(ArgumentError("inconsistent number of shifts"))
+
         # read the seeds
         for i = 1:N
             parent(z.x[i]) .= read(file, "seed_$i")
         end
-
-        # read attributes
-        attributes = attrs(file)
         
         # and period and shifts
         z.d = tuple([read(attributes, "d$i") for i = 1:NS]...)

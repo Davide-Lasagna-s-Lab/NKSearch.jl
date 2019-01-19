@@ -70,4 +70,11 @@ end
     @test b.d == (1.0, 4.0)
     @test length(keys(dict)) == 1
     @test dict["dt"] == 2.0
+
+    # check for mistakes
+    c = MVector(([1, 2, 3],), 1.0, 4.0)
+    @test_throws ArgumentError load_seed!(c, "test.file")
+
+    d = MVector(([1, 2, 3], [4, 5, 6], [7, 8, 9]), 1.0)
+    @test_throws ArgumentError load_seed!(c, "test.file")
 end
