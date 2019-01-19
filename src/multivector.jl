@@ -96,13 +96,24 @@ function save(z::MVector{X, N, NS}, path::String) where {X, N, NS}
     end
 end
 
+# a hack
+_is_complex_eltype(z::MVector) = eltype(z[1]) <: Complex
+
 # save MVector to file, including other 
 function save_seed(z::MVector{X, N, NS},
                 path::String,
-               other::Dict{String, <:Any}) where {X, N, NS}
+               other::Dict{String, <:Any} = Dict{String, Any}()) where {X, N, NS}
+    # test whether X is a complex type
     h5open(path, "w") do file
-        for i = 1:N
-            write(file, "seed_$i", parent(z.x[i]))
+        if _is_complex_eltype(z)
+            for i = 1:N
+                write(file, "seed_$(i)_real", real(parent(z.x[i])))
+                write(file, "seed_$(i)_imag", imag(parent(z.x[i])))
+            end
+        else
+            for i = 1:N
+                write(file, "seed_$i", parent(z.x[i]))
+            end
         end
         for i = 1:NS
             attrs(file)["d$i"] = z.d[i]
@@ -126,7 +137,9 @@ function load_seed!(z::MVector{X, N, NS},
         attributes = attrs(file)
 
         # checks
-        N == length(names(file)) ||
+        factor = _is_complex_eltype(z) ? 2 : 1
+
+        factor*N == length(names(file)) ||
             throw(ArgumentError("inconsistent number of seeds"))
 
         NS == length([read(attributes, el) 
@@ -134,8 +147,14 @@ function load_seed!(z::MVector{X, N, NS},
             throw(ArgumentError("inconsistent number of shifts"))
 
         # read the seeds
-        for i = 1:N
-            parent(z.x[i]) .= read(file, "seed_$i")
+        if _is_complex_eltype(z)
+            for i = 1:N
+                parent(z.x[i]) .= read(file, "seed_$(i)_real") .+ im.*read(file, "seed_$(i)_imag")
+            end
+        else
+            for i = 1:N
+                parent(z.x[i]) .= read(file, "seed_$i")
+            end
         end
         
         # and period and shifts

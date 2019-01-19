@@ -77,4 +77,11 @@ end
 
     d = MVector(([1, 2, 3], [4, 5, 6], [7, 8, 9]), 1.0)
     @test_throws ArgumentError load_seed!(c, "test.file")
+
+    # with complex input
+    e = MVector(([1+im, 2+2*im, 3+3*im],), 1.0)
+    save_seed(e, "test2.file")
+    f, dict = load_seed!(similar(e), "test2.file")
+    @test f[1] == e[1]
+    @test f.d  == e.d
 end
