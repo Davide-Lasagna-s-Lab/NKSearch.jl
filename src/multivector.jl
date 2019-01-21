@@ -101,6 +101,8 @@ function save(z::MVector{X, N, NS}, path::String) where {X, N, NS}
     end
 end
 
+# a hack
+_is_complex_eltype(z::MVector) = eltype(parent(z[1])) <: Complex
 
 # save MVector to file, including other 
 function save_seeds(z::MVector{X, N, NS},
