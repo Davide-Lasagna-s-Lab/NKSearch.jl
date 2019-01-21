@@ -5,7 +5,12 @@
 import LinearAlgebra
 import HDF5: write, h5open, h5readattr, attrs
 
-export MVector, tovector, fromvector!, save_seed, load_seed!
+export MVector, 
+       tovector,
+       fromvector!,
+       save_seeds,
+       load_seeds!,
+       find_number_of_segments
 
 # ~~~ INTERFACE FOR MVector and MMatrix ~~~
 # The type parameter `X` must support
@@ -96,13 +101,11 @@ function save(z::MVector{X, N, NS}, path::String) where {X, N, NS}
     end
 end
 
-# a hack
-_is_complex_eltype(z::MVector) = eltype(z[1]) <: Complex
 
 # save MVector to file, including other 
-function save_seed(z::MVector{X, N, NS},
-                path::String,
-               other::Dict{String, <:Any} = Dict{String, Any}()) where {X, N, NS}
+function save_seeds(z::MVector{X, N, NS},
+                 path::String,
+                other::Dict{String, <:Any} = Dict{String, Any}()) where {X, N, NS}
     # test whether X is a complex type
     h5open(path, "w") do file
         if _is_complex_eltype(z)
@@ -124,41 +127,38 @@ function save_seed(z::MVector{X, N, NS},
     end
 end
 
-# load data into z and return a NamedTuple of other attributes that were stored
-function load_seed!(z::MVector{X, N, NS},
-                 path::String) where {X, N, NS}
-
-    # load bit here
-    dict = Dict{String, Any}()
-
+# load data and return a NamedTuple of other attributes that were stored
+function load_seeds!(fun, path::String) where {X}
     h5open(path, "r") do file
-
-        # load attributes hendle
+        
+        # load attributes handle
         attributes = attrs(file)
 
-        # checks
-        factor = _is_complex_eltype(z) ? 2 : 1
+        # load bit here
+        dict = Dict{String, Any}()
 
-        factor*N == length(names(file)) ||
-            throw(ArgumentError("inconsistent number of seeds"))
+        # store seeds here
+        xs = []
 
-        NS == length([read(attributes, el) 
-                      for el in names(attributes) if startswith(el, "d")]) ||
-            throw(ArgumentError("inconsistent number of shifts"))
+        # determine if we saved complex data
+        is_complex_data = "seed_1_real" in names(file)
+            
+        # number of seeds
+        N = is_complex_data ? div(length(names(file)), 2) : length(names(file))
 
-        # read the seeds
-        if _is_complex_eltype(z)
+        # read real and imaginary part if we need so
+        if is_complex_data
             for i = 1:N
-                parent(z.x[i]) .= read(file, "seed_$(i)_real") .+ im.*read(file, "seed_$(i)_imag")
+                push!(xs, fun(read(file, "seed_$(i)_real") .+ im.*read(file, "seed_$(i)_imag")))
             end
         else
             for i = 1:N
-                parent(z.x[i]) .= read(file, "seed_$i")
+                push!(xs, read(file, "seed_$i"))
             end
         end
         
-        # and period and shifts
-        z.d = tuple([read(attributes, "d$i") for i = 1:NS]...)
+        # and period and shifts (all those that start with d)
+        d = [read(attributes, el) for el in names(attributes) if startswith(el, "d")]
 
         # also load other bits that might have been saved
         for k in names(attributes)
@@ -166,7 +166,7 @@ function load_seed!(z::MVector{X, N, NS},
                 dict[k[7:end]] = read(attributes, k)
             end
         end
+       
+        return MVector(tuple(xs...), d...), dict
     end
-
-    return z, dict
 end
