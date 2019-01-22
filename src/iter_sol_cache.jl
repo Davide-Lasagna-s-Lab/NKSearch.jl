@@ -7,20 +7,23 @@ import Flows
 
 # ~~~ Matrix Type ~~~
 mutable struct IterSolCache{X, N, NS, GType, LType, SType, DType}
-        G::GType             # flow operator with no shifts
-        L::LType             # linearised flow operator with no shifts
-        S::SType             # space shift operator (can be NoShift)
-        D::DType             # time (and space) derivative operator
-       xT::NTuple{N, X}      # time shifted conditions
-    dxTdT::NTuple{N, X}      # time derivative of flow operator
-       z0::MVector{X, N, NS} # current orbit
-      tmp::X                 # temporary storage
-     opts::Options           #
+        G::GType                                      # flow operator with no shifts
+        L::LType                                      # linearised flow operator with no shifts
+        S::SType                                      # space shift operator (can be NoShift)
+        D::DType                                      # time (and space) derivative operator
+       xT::NTuple{N, X}                               # time shifted conditions
+    dxTdT::NTuple{N, X}                               # time derivative of flow operator
+       z0::MVector{X, N, NS}                          # current orbit
+      mon::Flows.StoreOneButLast{X, typeof(identity)} # monitor
+      tmp::NTuple{2, X}                               # temporary storage
+     opts::Options                                    #
 end
 
 # Main outer constructor
 IterSolCache(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
-    IterSolCache(G, L, S, D, similar.(z0.x), similar.(z0.x), similar(z0), similar(z0[1]), opts)
+    IterSolCache(G, L, S, D, similar.(z0.x), similar.(z0.x), 
+                 similar(z0), Flows.StoreOneButLast(similar(z0[1])), 
+                 ntuple(i->similar(z0[1]), 2), opts)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(mm::IterSolCache{X}, δz::MVector{X}) where {X} = mul!(similar(δz), mm, δz)
@@ -47,10 +50,10 @@ function mul!(out::MVector{X, N, NS},
         out[i] .= δz[i]
 
         # set nonlinear initial condition
-        tmp      .= z0[i]
+        tmp[1] .= z0[i]
 
         # propagate by T/N
-        L(Flows.couple(tmp, out[i]), (0, T/N))
+        L(Flows.couple(tmp[1], out[i]), (0, T/N))
 
         # apply shift on last segment (if we have one)
         NS == 2 && i == N && S(out[i], z0.d[2])
@@ -65,10 +68,10 @@ function mul!(out::MVector{X, N, NS},
     end
 
     # shift derivative (if present) goes only on last element
-    NS == 2 && (out[N] .+= D[2](tmp, xT[N]).*δz.d[2])
+    NS == 2 && (out[N] .+= D[2](tmp[1], xT[N]).*δz.d[2])
 
     # add phase locking constraints
-    out.d = ntuple(j->dot(δz[1], D[j](tmp, z0[1])), NS)
+    out.d = ntuple(j->dot(δz[1], D[j](tmp[1], z0[1])), NS)
 
     return out
 end
@@ -90,23 +93,24 @@ function update!(mm::IterSolCache{X, N, NS},
     dxTdT = mm.dxTdT
     ϵ     = opts.ϵ
     T     = z0.d[1]
+    mon   = mm.mon
 
     # update initial and final states
     for i = 1:N
         # set and propagate
         xT[i] .= z0[i]
-        G(xT[i], (0, T/N))
+        G(xT[i], (0, T/N), mon)
 
-        # then get finite difference approximation of derivative
-        # of the flow operator with one additional propagation
-        tmp .= z0[i]
-        G(tmp, (0, T/N + ϵ))
-        dxTdT[i] .= (tmp .- xT[i])./ϵ
-
-        # last one gets shifted (if we have one)
-        NS == 2 && i == N && S(   xT[i], z0.d[2])
-        NS == 2 && i == N && S(dxTdT[i], z0.d[2])
+        # finite difference derivative of flow operator 
+        tmp[1] .= mon.x; tmp[2] .= mon.x;
+        G(tmp[1], (mon.t, T/N + ϵ))
+        G(tmp[2], (mon.t, T/N - ϵ))
+        dxTdT[i] .= 0.5.*(tmp[1] .- tmp[2])./ϵ
     end
+
+    # last one (may) get shifted
+    NS == 2 && S(   xT[i], z0.d[2])
+    NS == 2 && S(dxTdT[i], z0.d[2])
 
     # ~~ RIGHT HAND SIDE ~~
     # calculate negative error

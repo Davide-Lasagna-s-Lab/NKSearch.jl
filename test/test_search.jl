@@ -75,7 +75,7 @@ end
                         method=method))
 
         # solution is a loop of unit radius and with T = 2π
-        @test maximum( map(el->norm(el)-1, z.x) ) < 1e-9
-        @test abs(z.d[1] - 2π ) < 1e-9
+        @test maximum( map(el->norm(el)-1, z.x) ) < 4e-9
+        @test abs(z.d[1] - 2π ) < 4e-9
     end
 end
