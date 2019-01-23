@@ -109,8 +109,8 @@ function update!(mm::IterSolCache{X, N, NS},
     end
 
     # last one (may) get shifted
-    NS == 2 && S(   xT[i], z0.d[2])
-    NS == 2 && S(dxTdT[i], z0.d[2])
+    NS == 2 && S(   xT[N], z0.d[2])
+    NS == 2 && S(dxTdT[N], z0.d[2])
 
     # ~~ RIGHT HAND SIDE ~~
     # calculate negative error
