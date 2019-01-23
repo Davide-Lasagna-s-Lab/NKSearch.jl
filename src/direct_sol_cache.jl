@@ -30,7 +30,8 @@ struct DirectSolCache{X, GType, LType, SType, DType}
         D::DType             # time (and space) derivative operator
         A::SparseMatrixCSC{Float64, Int}
         Y::Matrix{Float64}   # temporaries
-      tmp::NTuple{2, X}
+      tmp::NTuple{3, X}
+      mon::Flows.StoreOneButLast{X, typeof(copy)} # monitor
 end
 
 function DirectSolCache(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
@@ -42,7 +43,8 @@ function DirectSolCache(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS
                    D,
                    spzeros(m, m),
                    zeros(n, n),
-                   ntuple(i->similar(z0.x[1]), 2))
+                   ntuple(i->similar(z0.x[1]), 3), 
+                   Flows.StoreOneButLast(z0.x[1]))
 end
 
 Base.:*(dsm::DirectSolCache{X}, dz::MVector{X}) where {X} = 
@@ -57,9 +59,11 @@ function update!(dsm::DirectSolCache,
 
     # aliases
      A = dsm.A; A.nzval .= 0
+   mon = dsm.mon
      Y = dsm.Y
     _u = dsm.tmp[1]
     _v = dsm.tmp[2]
+    _w = dsm.tmp[3]
      S = dsm.S
      L = dsm.L
      D = dsm.D
@@ -101,24 +105,25 @@ function update!(dsm::DirectSolCache,
 
     # right borders and right hand side
     for i = 1:N
-        _u .= z0[i]
-        G(_u, (0, T/N))
+        _w .= z0[i]
+        G(_w, (0, T/N), mon)
 
-        _v .= z0[i]
-        G(_v, (0, T/N + opts.ϵ))
+        _u .= mon.x; _v .= mon.x;
+        G(_u, (mon.t, T/N + opts.ϵ))
+        G(_v, (mon.t, T/N - opts.ϵ))
+        _v .= 0.5.*(_u .- _v)./opts.ϵ
 
-        _v .= (_v .- _u)./(N .* opts.ϵ)
         NS == 2 && i == N && S(_v, s)
 
-        A[_blockrng(i, n), end - NS + 1] .= _v
+        A[_blockrng(i, n), end - NS + 1] .= _v./N
 
         if NS == 2 && i == N
-            S(_u, s)
-            D[2](_v, _u)
+            S(_w, s)
+            D[2](_v, _w)
             A[_blockrng(i, n), end] .= _v
         end
 
-        b[i] .= z0[i % N + 1] .- _u
+        b[i] .= z0[i % N + 1] .- _w
     end
 
     # reset shifts
