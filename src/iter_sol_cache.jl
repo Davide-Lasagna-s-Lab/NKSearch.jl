@@ -14,7 +14,7 @@ mutable struct IterSolCache{X, N, NS, GType, LType, SType, DType}
        xT::NTuple{N, X}                               # time shifted conditions
     dxTdT::NTuple{N, X}                               # time derivative of flow operator
        z0::MVector{X, N, NS}                          # current orbit
-      mon::Flows.StoreOneButLast{X, typeof(identity)} # monitor
+      mon::Flows.StoreOneButLast{X, typeof(copy)} # monitor
       tmp::NTuple{2, X}                               # temporary storage
      opts::Options                                    #
 end
@@ -22,7 +22,7 @@ end
 # Main outer constructor
 IterSolCache(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
     IterSolCache(G, L, S, D, similar.(z0.x), similar.(z0.x), 
-                 similar(z0), Flows.StoreOneButLast(similar(z0[1])), 
+                 similar(z0), Flows.StoreOneButLast(z0[1]), 
                  ntuple(i->similar(z0[1]), 2), opts)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
