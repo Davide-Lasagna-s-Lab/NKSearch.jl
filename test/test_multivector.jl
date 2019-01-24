@@ -2,6 +2,7 @@
 
     a = MVector(([1, 2, 3], [4, 5, 6], [7, 8, 9]), 2.0, 4.0)
     b = copy(a)
+    @test nsegments(a) == 3
     @test a[1] == [1, 2, 3]
     @test a[2] == [4, 5, 6]
     @test a[3] == [7, 8, 9]

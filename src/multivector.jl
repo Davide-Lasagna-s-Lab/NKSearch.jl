@@ -8,6 +8,7 @@ import HDF5: write, h5open, h5readattr, attrs
 export MVector, 
        tovector,
        fromvector!,
+       nsegments,
        save_seeds,
        load_seeds!,
        find_number_of_segments
@@ -30,6 +31,9 @@ end
 
 # getindex to have z[i] mean z.x[i]
 Base.getindex(z::MVector, i::Int) = z.x[i]
+
+# number of segments
+nsegments(::MVector{X, N}) where {X, N} = N
 
 # interface for GMRES solver
 Base.similar(z::MVector) = MVector(similar.(z.x), z.d...)
