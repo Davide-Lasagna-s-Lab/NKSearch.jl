@@ -21,9 +21,8 @@ mutable struct IterSolCache{X, N, NS, M, GType, LType, SType, DType}
 end
 
 # Main outer constructor
-IterSolCache(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
-    IterSolCache([deepcopy(G) for i = 1:N], 
-                 [deepcopy(L) for i = 1:N], S, D, similar.(z0.x), similar.(z0.x), 
+IterSolCache(Gs::Vector, Ls::Vector, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
+    IterSolCache(Gs, Ls, S, D, similar.(z0.x), similar.(z0.x), 
                  similar(z0), [Flows.StoreOneButLast(z0[1]) for i = 1:N], 
                  ntuple(i->similar(z0[1]), 2N + 2), opts)
 

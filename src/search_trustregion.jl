@@ -5,17 +5,17 @@
 using Printf
 
 # trust region method implementation
-function _search_trustregion!(G, L, S, D, z, cache, opts)
+function _search_trustregion!(Gs, Ls, S, D, z, cache, opts)
     # display nice header
     opts.verbose && display_header_tr(opts.io, z)
 
     # allocate memory
-    b   = similar(z)              # right hand side
-    dz  = similar(z)              # temporary
-    tmp = similar(z[1])           # temporary
+    b    = similar(z)              # right hand side
+    dz   = similar(z)              # temporary
+    tmps = similar.(z.x)           # temporaries
 
     # calculate initial error
-    e_norm = e_norm_λ(G, S, z, z, 0.0, tmp)
+    e_norm = e_norm_λ(Gs, S, z, z, 0.0, tmps)
 
     # init
     tr_radius = opts.tr_radius_init
@@ -27,8 +27,7 @@ function _search_trustregion!(G, L, S, D, z, cache, opts)
                                       0,
                                       e_norm,
                                       0,
-                                      tr_radius,
-                                      0)
+                                      tr_radius)
 
     status = :maxiter_reached
 
@@ -43,8 +42,8 @@ function _search_trustregion!(G, L, S, D, z, cache, opts)
         hits_boundary, which, step = solve_tr_subproblem!(dz, z, cache, tr_radius, opts)
 
         # calc actual reductions
-        e_norm_curr = e_norm_λ(G, S, z, dz, 0.0, tmp)
-        e_norm_next = e_norm_λ(G, S, z, dz, 1.0, tmp)
+        e_norm_curr = e_norm_λ(Gs, S, z, dz, 0.0, tmps)
+        e_norm_next = e_norm_λ(Gs, S, z, dz, 1.0, tmps)
         actual = e_norm_curr - e_norm_next
 
         # calc predicted reduction
@@ -80,11 +79,10 @@ function _search_trustregion!(G, L, S, D, z, cache, opts)
             display_status_tr(opts.io,
                               iter,
                               which,
-                              step,
+                              dz_norm,
                               e_norm,
                               rho,
-                              tr_radius,
-                              dz_norm)
+                              tr_radius)
         end
 
         # tolerances reached
@@ -133,8 +131,8 @@ function solve_hookstep_subproblem!(dz::MVector, z::MVector, cache, tr_radius::R
     # of the number of iterations. This is a symptom of the fact that
     # the GMRES solution is affected by the trust region size and we can thus 
     # use this info to decide whether we want to increase or decrease it.
-    if norm(dz) < tr_radius && res_err_norm <= opts.gmres_rtol
-        return false, :newton, 1.0
+    if norm(dz) < tr_radius * (1 + 1e-6) && res_err_norm <= opts.gmres_rtol
+        return false, :newton, norm(dz)
     else 
         return true,  :hkstep, tr_radius
     end

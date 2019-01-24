@@ -4,6 +4,7 @@
 
 import Flows
 import LinearAlgebra: norm
+using Base.Threads
 
 # line search method implementation
 function _search_linesearch!(G, L, S, D, z0, A, opts)
@@ -64,35 +65,35 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
     return nothing
 end
 
-function e_norm_λ(G,
+function e_norm_λ(Gs,
                   S,
                  z0::MVector{X, N, NS},
                  δz::MVector{X, N, NS},
                   λ::Real,
-                tmp::X) where {X, N, NS}
+                tmps::NTuple{N, X}) where {X, N, NS}
 
     # initialize
-    val_λ = zero(norm(tmp)^2)
+    val_λ = zero(norm(tmps[1])^2)
 
     # sum all error contributions
-    for i = 1:N
+    Threads.@threads for i = 1:N
         # set initial condition
-        tmp  .= z0[i] .+ λ.*δz[i]
+        tmps[i]  .= z0[i] .+ λ.*δz[i]
 
         # and propagation time
         Ti = (z0.d[1] + λ*δz.d[1])/N
 
         # actual propagation
-        G(tmp, (0, Ti))
+        Gs[i](tmps[i], (0, Ti))
 
         # last segment is shifted (if we have a shift)
-        NS == 2 && i == N && S(tmp, z0.d[2] + λ*δz.d[2])
+        NS == 2 && i == N && S(tmps[i], z0.d[2] + λ*δz.d[2])
 
         # calc difference
-        tmp .-= z0[i%N+1] .+ λ.*δz[i%N+1]
+        tmps[i] .-= z0[i%N+1] .+ λ.*δz[i%N+1]
 
         # add to error
-        val_λ += norm(tmp)^2
+        val_λ += norm(tmps[i])^2
     end
 
     return val_λ
