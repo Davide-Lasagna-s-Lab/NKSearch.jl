@@ -65,17 +65,18 @@ end
                 L,
                 (dxdt, x)->F(0, x, dxdt),
                 z,
-                Options(maxiter=15,
-                        dz_norm_tol=1e-16,
+                Options(maxiter=25,
+                        dz_norm_tol=1e-18,
                         gmres_verbose=false,
-                        e_norm_tol=1e-16,
-                        gmres_maxiter=4,
+                        e_norm_tol=1e-18,
+                        gmres_maxiter=5,
                         verbose=false,
                         tr_radius_init=0.001,
-                        method=method))
+                        method=method,
+                        ϵ=1e-7))
 
         # solution is a loop of unit radius and with T = 2π
-        @test maximum( map(el->norm(el)-1, z.x) ) < 4e-9
-        @test abs(z.d[1] - 2π ) < 4e-9
+        @test maximum( map(el->norm(el)-1, z.x) ) < 1e-9
+        @test abs(z.d[1] - 2π ) < 1e-9
     end
 end
