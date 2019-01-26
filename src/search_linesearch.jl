@@ -1,10 +1,9 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-
-import Flows
+import Base.Threads: threadid, @threads, nthreads, atomic_add!, Atomic
 import LinearAlgebra: norm
-using Base.Threads
+import Flows
 
 # line search method implementation
 function _search_linesearch!(G, L, S, D, z0, A, opts)
@@ -65,38 +64,38 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
     return nothing
 end
 
-function e_norm_λ(Gs,
-                  S,
-                 z0::MVector{X, N, NS},
-                 δz::MVector{X, N, NS},
-                  λ::Real,
-                tmps::NTuple{N, X}) where {X, N, NS}
+function e_norm_λ(Gs::NTuple{NT},
+                   S,
+                  z0::MVector{X, N, NS},
+                  δz::MVector{X, N, NS},
+                   λ::Real,
+                tmps::NTuple{NT, X}) where {X, N, NS, NT}
 
-    # initialize
-    val_λ = zero(norm(tmps[1])^2)
+    # store reduction here
+    out = Atomic{Float64}(0.0)
 
     # sum all error contributions
-    Threads.@threads for i = 1:N
-        # set initial condition
-        tmps[i]  .= z0[i] .+ λ.*δz[i]
+    @threads for i = 1:N
+        # this thread id
+        id = threadid()
 
-        # and propagation time
-        Ti = (z0.d[1] + λ*δz.d[1])/N
+        # set initial condition
+        tmps[id] .= z0[i] .+ λ.*δz[i]
 
         # actual propagation
-        Gs[i](tmps[i], (0, Ti))
+        Gs[id](tmps[id], (0, (z0.d[1] + λ*δz.d[1])/N))
 
         # last segment is shifted (if we have a shift)
-        NS == 2 && i == N && S(tmps[i], z0.d[2] + λ*δz.d[2])
+        NS == 2 && i == N && S(tmps[id], z0.d[2] + λ*δz.d[2])
 
         # calc difference
-        tmps[i] .-= z0[i%N+1] .+ λ.*δz[i%N+1]
+        tmps[id] .-= z0[i%N+1] .+ λ.*δz[i%N+1]
 
-        # add to error
-        val_λ += norm(tmps[i])^2
+        # atomic add to error
+        atomic_add!(out, norm(tmps[id])^2)
     end
 
-    return val_λ
+    return out[]
 end
 
 function linesearch(G, S, z0::MVector{X, N}, δz::MVector{X, N}, opts::Options, tmp::X) where {X, N}

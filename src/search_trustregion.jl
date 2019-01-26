@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-
+import Base.Threads: nthreads
 using Printf
 
 # trust region method implementation
@@ -10,9 +10,9 @@ function _search_trustregion!(Gs, Ls, S, D, z, cache, opts)
     opts.verbose && display_header_tr(opts.io, z)
 
     # allocate memory
-    b    = similar(z)              # right hand side
-    dz   = similar(z)              # temporary
-    tmps = similar.(z.x)           # temporaries
+    b    = similar(z)                           # right hand side
+    dz   = similar(z)                           # temporary
+    tmps = ntuple(i->similar(z[1]), nthreads()) # one temporary for each thread
 
     # calculate initial error
     e_norm = e_norm_λ(Gs, S, z, z, 0.0, tmps)

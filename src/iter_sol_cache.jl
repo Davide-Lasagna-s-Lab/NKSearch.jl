@@ -1,30 +1,34 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
+import Base.Threads: threadid, @threads, nthreads
 import LinearAlgebra: dot
 import GMRES: gmres!
 import Flows
-using Base.Threads
 
 # ~~~ Matrix Type ~~~
-mutable struct IterSolCache{X, N, NS, M, GType, LType, SType, DType}
-       Gs::Vector{GType}                                  # flow operator with no shifts
-       Ls::Vector{LType}                                  # linearised flow operator with no shifts
-        S::SType                                          # space shift operator (can be NoShift)
-        D::DType                                          # time (and space) derivative operator
-       xT::NTuple{N, X}                                   # time shifted conditions
-    dxTdT::NTuple{N, X}                                   # time derivative of flow operator
-       z0::MVector{X, N, NS}                              # current orbit
-     mons::Vector{Flows.StoreOneButLast{X, typeof(copy)}} # monitor
-      tmp::NTuple{M, X}                                   # temporary storage
-     opts::Options                                        #
+struct IterSolCache{X, N, NS, M, GST, LST, ST, DT, MT}
+       Gs::GST               # flow operator(s)
+       Ls::LST               # linearised flow operator (s)
+        S::ST                # space shift operator
+        D::DT                # time (and space) derivative operators
+       xT::NTuple{N, X}      # time shifted conditions
+    dxTdT::NTuple{N, X}      # time derivative of flow operator
+      tmp::NTuple{M, X}      # temporary storage
+       z0::MVector{X, N, NS} # current orbit
+     mons::MT                # monitor
+     opts::Options           #
 end
 
 # Main outer constructor
-IterSolCache(Gs::Vector, Ls::Vector, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
-    IterSolCache(Gs, Ls, S, D, similar.(z0.x), similar.(z0.x), 
-                 similar(z0), [Flows.StoreOneButLast(z0[1]) for i = 1:N], 
-                 ntuple(i->similar(z0[1]), 2N + 2), opts)
+IterSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
+    IterSolCache(Gs, Ls, S, D,
+                 similar.(z0.x),
+                 similar.(z0.x),
+                 ntuple(i->similar(z0[1]), 2*nthreads() + 2),
+                 similar(z0),
+                 ntuple(i->Flows.StoreOneButLast(z0[1]), nthreads()),
+                 opts)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(mm::IterSolCache{X}, δz::MVector{X}) where {X} = mul!(similar(δz), mm, δz)
@@ -45,15 +49,18 @@ function mul!(out::MVector{X, N, NS},
     ϵ     = mm.opts.ϵ
 
     # compute L{x0[i]}⋅δz[i] - δz[i+1]
-    Threads.@threads for i = 1:N
+    @threads for i = 1:N
+        # this thread id
+        id = threadid()
+
         # set perturbation initial condition
         out[i] .= δz[i]
 
         # set nonlinear initial condition
-        tmp[i] .= z0[i]
+        tmp[id] .= z0[i]
 
         # propagate by T/N
-        Ls[i](Flows.couple(tmp[i], out[i]), (0, T/N))
+        Ls[id](Flows.couple(tmp[id], out[i]), (0, T/N))
 
         # apply shift on last segment (if we have one)
         NS == 2 && i == N && S(out[i], z0.d[2])
@@ -96,16 +103,20 @@ function update!(mm::IterSolCache{X, N, NS},
     mons  = mm.mons
 
     # update initial and final states
-    Threads.@threads for i = 1:N
+    @threads for i = 1:N
+        # this thread ID
+        id = threadid()
+
         # set and propagate
         xT[i] .= z0[i]
-        Gs[i](xT[i], (0, T/N), mons[i])
+        Gs[id](xT[i], (0, T/N), mons[id])
 
-        # finite difference derivative of flow operator 
-        tmp[i] .= mons[i].x; tmp[2i] .= mons[i].x;
-        Gs[i](tmp[ i], (mons[i].t, T/N + ϵ))
-        Gs[i](tmp[2i], (mons[i].t, T/N - ϵ))
-        dxTdT[i] .= 0.5.*(tmp[i] .- tmp[2i])./ϵ
+        # finite difference derivative of flow operator
+        tmp[2*id  ] .= mons[id].x;
+        tmp[2*id-1] .= mons[id].x;
+        Gs[id](tmp[2*id  ], (mons[id].t, T/N + ϵ))
+        Gs[id](tmp[2*id-1], (mons[id].t, T/N - ϵ))
+        dxTdT[i] .= 0.5.*(tmp[2*id] .- tmp[2*id-1])./ϵ
     end
 
     # last one (may) get shifted
