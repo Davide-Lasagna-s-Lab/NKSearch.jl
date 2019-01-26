@@ -105,6 +105,19 @@ function save(z::MVector{X, N, NS}, path::String) where {X, N, NS}
     end
 end
 
+# Return integer N such that M/N is integer, where T/Tmin < N < T/Tmax.
+# Return 0 if no such integer can be found
+function find_number_of_segments(M::Int, T::Real, Tmin::Real, Tmax::Real)
+    Nmin = Int(floor(T/Tmin))
+    Nmax = Int(ceil( T/Tmax))    
+    for N = Nmax:Nmin
+        if M % N == 0 
+            return N
+        end
+    end
+    return 0
+end
+
 # a hack
 _is_complex_eltype(z::MVector) = eltype(parent(z[1])) <: Complex
 
