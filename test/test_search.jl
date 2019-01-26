@@ -54,9 +54,9 @@ end
              TimeStepConstant(1e-3))
 
     for method in (:tr_direct,
-                   :ls_direct,
-                   :ls_iterative,
-                   :tr_iterative)
+                   #:ls_direct,
+                   #:ls_iterative,
+                   :tr_iterative,)
         # define initial guess, a slightly perturbed orbit
         z = MVector(([2, 0.0], [-2, 0.0]), 2π)
 
@@ -67,10 +67,10 @@ end
                 z,
                 Options(maxiter=25,
                         dz_norm_tol=1e-18,
-                        gmres_verbose=false,
+                        gmres_verbose=true,
                         e_norm_tol=1e-18,
                         gmres_maxiter=5,
-                        verbose=false,
+                        verbose=true,
                         tr_radius_init=0.001,
                         method=method,
                         ϵ=1e-7))

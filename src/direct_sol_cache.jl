@@ -1,9 +1,9 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-
-import LinearAlgebra: lu, ldiv!
+import Base.Threads: threadid, @threads, nthreads
 import SparseArrays: spzeros, SparseMatrixCSC, diagind
+import LinearAlgebra: lu, ldiv!
 import Flows: couple
 
 
@@ -23,32 +23,31 @@ function op_apply_eye!(out::Matrix{T},
     return out
 end
 
-struct DirectSolCache{X, GType, LType, SType, DType}
-        G::GType             # flow operator with no shifts
-        L::LType             # linearised flow operator with no shifts
-        S::SType             # space shift operator (can be NoShift)
-        D::DType             # time (and space) derivative operator
-        A::SparseMatrixCSC{Float64, Int}
-        Y::Matrix{Float64}   # temporaries
-      tmp::NTuple{3, X}
-      mon::Flows.StoreOneButLast{X, typeof(copy)} # monitor
+struct DirectSolCache{GST, LST, ST, DT, YST, TMPST, MONST}
+      Gs::GST               # flow operator with no shifts
+      Ls::LST               # linearised flow operator with no shifts
+       S::ST                # space shift operator (can be NoShift)
+       D::DT                # time (and space) derivative operator
+       A::SparseMatrixCSC{Float64, Int}
+      Ys::YST               # temporaries
+    tmps::TMPST
+    mons::MONST             # monitor
 end
 
-function DirectSolCache(G, L, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
+function DirectSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
     n = length(z0[1])
     m = N *n + NS
-    DirectSolCache(G,
-                   L,
+    DirectSolCache(Gs,
+                   Ls,
                    S,
                    D,
                    spzeros(m, m),
-                   zeros(n, n),
-                   ntuple(i->similar(z0.x[1]), 3), 
-                   Flows.StoreOneButLast(z0.x[1]))
+                   ntuple(i->zeros(n, n), nthreads()),
+                   ntuple(i->similar(z0[1]), 3*nthreads()), 
+                   ntuple(i->Flows.StoreOneButLast(z0[1]), nthreads()))
 end
 
-Base.:*(dsm::DirectSolCache{X}, dz::MVector{X}) where {X} = 
-    fromvector!(similar(dz), dsm.A*tovector(dz))
+Base.:*(dsm::DirectSolCache, dz::MVector) = fromvector!(similar(dz), dsm.A*tovector(dz))
 
 function update!(dsm::DirectSolCache,
                    b::MVector{X, N, NS},
@@ -58,31 +57,36 @@ function update!(dsm::DirectSolCache,
     n = length(b[1])
 
     # aliases
-     A = dsm.A; A.nzval .= 0
-   mon = dsm.mon
-     Y = dsm.Y
-    _u = dsm.tmp[1]
-    _v = dsm.tmp[2]
-    _w = dsm.tmp[3]
-     S = dsm.S
-     L = dsm.L
-     D = dsm.D
-     G = dsm.G
-     T = z0.d[1]
-     s = NS == 2 ? z0.d[2] : 0.0
+       A = dsm.A; A.nzval .= 0
+    mons = dsm.mons
+    tmps = dsm.tmps
+      Ys = dsm.Ys
+      Ls = dsm.Ls
+      Gs = dsm.Gs
+       S = dsm.S
+       D = dsm.D
+       T = z0.d[1]
+       s = NS == 2 ? z0.d[2] : 0.0
 
-    op1(x, y, span) = (L(couple(x, y), span); y)
-    op2(x, y, span) = (L(couple(x, y), span); S(y, s); y)
+    # linear operators on the diagonal
+    op1(id) = (x, y, span)->(Ls[id](couple(x, y), span); y)
+    op2(id) = (x, y, span)->(Ls[id](couple(x, y), span); S(y, s); y)
 
     # fill main block
-    for i = 1:N
+    @threads for i = 1:N
+        # this thread id
+        id = threadid()
+        
+        # global indices where we will write
         rng = _blockrng(i, n)
+
+        # write i-th block on diagonal
         if NS == 2 && i == N
-            op_apply_eye!(Y, op2, z0[i], (0, T/N), _u, _v)
+            op_apply_eye!(Ys[id], op2(id), z0[i], (0, T/N), tmps[3*id], tmps[3*id-1])
         else
-            op_apply_eye!(Y, op1, z0[i], (0, T/N), _u, _v)
+            op_apply_eye!(Ys[id], op1(id), z0[i], (0, T/N), tmps[3*id], tmps[3*id-1])
         end
-        A[rng, rng] .= Y
+        A[rng, rng] .= Ys[id]
     end
 
     # add identities on diagonals
@@ -98,32 +102,47 @@ function update!(dsm::DirectSolCache,
     A[:, end - NS + 1:end] .= 0
 
     # lower borders
-    A[end - NS + 1, _blockrng(1, n)] .= D[1](_u, z0[1])
+    A[end - NS + 1, _blockrng(1, n)] .= D[1](tmps[1], z0[1])
     if NS == 2
-        A[end, _blockrng(1, n)] .= D[2](_u, z0[1])
+        A[end, _blockrng(1, n)] .= D[2](tmps[1], z0[1])
     end
 
     # right borders and right hand side
-    for i = 1:N
-        _w .= z0[i]
-        G(_w, (0, T/N), mon)
+    @threads for i = 1:N
+        # id of current thread
+        id = threadid()
 
-        _u .= mon.x; _v .= mon.x;
-        G(_u, (mon.t, T/N + opts.ϵ))
-        G(_v, (mon.t, T/N - opts.ϵ))
-        _v .= 0.5.*(_u .- _v)./opts.ϵ
+        # aliases
+        _u1 = tmps[3*id]
+        _u2 = tmps[3*id-1]
+        _u3 = tmps[3*id-2]
 
-        NS == 2 && i == N && S(_v, s)
+        # obtain final state
+        _u3 .= z0[i]
+        Gs[id](_u3, (0, T/N), mons[id])
 
-        A[_blockrng(i, n), end - NS + 1] .= _v./N
+        # calc derivative of flow operator
+        _u1 .= mons[id].x
+        _u2 .= mons[id].x;
+        Gs[id](_u1, (mons[id].t, T/N + opts.ϵ))
+        Gs[id](_u2, (mons[id].t, T/N - opts.ϵ))
+        _u2 .= 0.5.*(_u1 .- _u2)./opts.ϵ
 
+        #apply shift if needed
+        NS == 2 && i == N && S(_u2, s)
+
+        # write along column
+        A[_blockrng(i, n), end - NS + 1] .= _u2./N
+
+        # write column for the shift
         if NS == 2 && i == N
-            S(_w, s)
-            D[2](_v, _w)
-            A[_blockrng(i, n), end] .= _v
+            S(_u1, s)
+            D[2](_u2, _u1)
+            A[_blockrng(i, n), end] .= _u2
         end
 
-        b[i] .= z0[i % N + 1] .- _w
+        # rhs
+        b[i] .= z0[i % N + 1] .- _u3
     end
 
     # reset shifts
