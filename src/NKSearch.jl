@@ -15,7 +15,11 @@ include("iter_sol_cache.jl")
 include("direct_sol_cache.jl")
 include("output.jl")
 include("newton.jl")
+include("jfop.jl")
 include("search_linesearch.jl")
 include("search_trustregion.jl")
+
+# sensitivity stuff
+include("sensitivity/adjoint_sol_cache.jl")
 
 end
