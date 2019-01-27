@@ -26,10 +26,10 @@
                 z,
                 Options(maxiter=25,
                         dz_norm_tol=1e-18,
-                        gmres_verbose=true,
+                        gmres_verbose=false,
                         e_norm_tol=1e-18,
                         gmres_maxiter=5,
-                        verbose=true,
+                        verbose=false,
                         tr_radius_init=0.001,
                         method=method,
                         ϵ=1e-7))

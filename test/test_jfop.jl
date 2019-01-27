@@ -29,8 +29,8 @@
     @test LFD.tmps[1] != G(copy(x2), (0, 1))
 
     # calc using FD approx
-    LFD(Flows.couple(x1, y1), (0, 1))
-    LEX(Flows.couple(x2, y2), (0, 1))
+    LFD(Flows.couple(copy(x1), y1), (0, 1))
+    LEX(Flows.couple(copy(x2), y2), (0, 1))
 
     # they must be similar
     @test norm(y1 - y2)/norm(y1) < 1e-6
