@@ -29,7 +29,6 @@ search!(G, L, F, z0::MVector{X, N, 1}, opts::Options=Options()) where {X, N} =
 
 # dispatch to correct method
 function _search!(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
-
     return (  opts.method == :ls_direct
             ? _search_linesearch!(Gs, Ls, S, D, z0, DirectSolCache(Gs, Ls, S, D, z0, opts), opts)
             : opts.method == :ls_iterative

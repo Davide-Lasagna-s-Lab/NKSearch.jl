@@ -27,6 +27,7 @@ function has_seen(op::JFOp, span, x)
 end
 
 function (op::JFOp)(xy::Flows.Coupled{2}, span::NTuple{2, Real})
+    
     # unpack
     x, y = xy[1], xy[2]
 
@@ -34,7 +35,7 @@ function (op::JFOp)(xy::Flows.Coupled{2}, span::NTuple{2, Real})
     xT, xTp = op.tmps
 
     # perturbed calculation
-    xTp .= x .+ op.epsilon.*y
+    xTp .= x .+ op.epsilon.*y#./norm(y).*norm(x)
     op.G(xTp, span)
 
     # if we have not calculated G(x, span) before, do the calculations
