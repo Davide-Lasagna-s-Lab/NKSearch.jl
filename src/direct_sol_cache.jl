@@ -136,8 +136,8 @@ function update!(dsm::DirectSolCache,
 
         # write column for the shift
         if NS == 2 && i == N
-            S(_u1, s)
-            D[2](_u2, _u1)
+            S(_u3, s)
+            D[2](_u2, _u3)
             A[_blockrng(i, n), end] .= _u2
         end
 
