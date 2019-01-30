@@ -27,6 +27,14 @@ const _header_tr = "+------+--------+-----------+-----------+------------+------
 display_header_tr(io::IO, ::MVector{X, N, NS}) where {X, N, NS} = 
     (print(_header_tr); flush(io))
 
+# hookstep
+const _header_hks = "+------+--------+-----------+-------------+------------+-----------+-----------+----------+\n"*
+                    "| iter | which  |  ||dz||   |   ||e||^2   |    rho     | tr_radius | GMRES res | GMRES it |\n"*
+                    "+------+--------+-----------+-------------+------------+-----------+-----------+----------+\n"
+
+display_header_hks(io::IO, ::MVector{X, N, NS}) where {X, N, NS} = 
+    (print(_header_hks); flush(io))
+
 # ~~~ DISPLAY FUNCTIONS ~~~
 
 # line search
@@ -50,6 +58,13 @@ end
 # trust region
 function display_status_tr(io::IO, iter, which, dz_norm, e_norm, rho, tr_radius)
     str = @sprintf "|%4d  | %s | %5.3e | %5.3e | %+5.3e | %5.3e |" iter lpad(which, 6) dz_norm e_norm rho tr_radius
+    println(str)
+    flush(stdout)
+end
+
+# trust region
+function display_status_hks(io::IO, iter, which, dz_norm, e_norm, rho, tr_radius, GMRES_res, GMRES_it)
+    str = @sprintf "|%4d  | %s | %5.3e | %7.5e | %+5.3e | %5.3e | %5.3e | %8d |" iter lpad(which, 6) dz_norm e_norm rho tr_radius GMRES_res GMRES_it
     println(str)
     flush(stdout)
 end
