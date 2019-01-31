@@ -18,6 +18,7 @@ include("newton.jl")
 include("jfop.jl")
 include("search_linesearch.jl")
 include("search_trustregion.jl")
+include("search_hookstep.jl")
 
 # sensitivity stuff
 include("sensitivity/adjoint_sol_cache.jl")
