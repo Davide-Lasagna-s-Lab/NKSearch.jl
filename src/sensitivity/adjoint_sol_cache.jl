@@ -35,6 +35,7 @@ function make_adjoint_problem(G,
 
     # this stores the derivative of the discrete flow operator
     dxTdTs = similar.(z.x)
+     xTs   = similar.(z.x)
 
     # monitors to store the state before the last step is made
     mons = ntuple(i->Flows.StoreOneButLast(tmps[1]), nthreads())
@@ -58,19 +59,19 @@ function make_adjoint_problem(G,
         id = threadid()
 
         # set initial condition
-        xT[i] .= z[i]
+        xTs[i] .= z[i]
 
         # propagate filling the cache and storing 
         # the state before the last step
-        Gs[id](xT[i], (0, T/N), Flows.reset!(caches[i]), mons[id])
+        Gs[id](xTs[i], (0, T/N), caches[i], mons[id])
 
         # Calculate derivative of the flow operator wrt T using
         # centered finite difference. This just requires little
         # computations, because we only propagate from the state
         # before the last step is done
-        tmps[2*id] .= mons[id].x; tmps[2i-1] .= mons[id].x;
-        G(tmps[2*id],   (mons[id].t, T/N + ϵ))
-        G(tmps[2*id-1], (mons[id].t, T/N - ϵ))
+        tmps[2*id] .= mons[id].x; tmps[2*id-1] .= mons[id].x;
+        Gs[id](tmps[2*id],   (mons[id].t, T/N + ϵ))
+        Gs[id](tmps[2*id-1], (mons[id].t, T/N - ϵ))
         dxTdTs[i] .= 0.5.*(tmps[2*id] .- tmps[2*id-1])./ϵ
     end
 
@@ -88,11 +89,11 @@ function make_adjoint_problem(G,
     rhs.d = zero.(rhs.d)
 
     # last elements need shifting
-    NS == 2 && (S(xT[end], s); S(dxTdTs[end], s))
+    NS == 2 && (S(xTs[N], s); S(dxTdTs[N], s))
 
     # construct object
     AdjointProblemLHS(ntuple(i->deepcopy(L), nthreads()), S, D, 
-                      dxTdTs, tmps, z, caches), rhs
+                      dxTdTs, xTs, tmps, z, caches), rhs
 end
 
 
@@ -107,7 +108,7 @@ function mul!(out::MVector{X, N, 2},
     dxTdTs = A.dxTdTs
     caches = A.caches
     tmps   = A.tmps
-    xTs    = A.dxTs
+    xTs    = A.xTs
     Ls     = A.Ls
     D      = A.D
     S      = A.S
@@ -126,7 +127,7 @@ function mul!(out::MVector{X, N, 2},
     out[1] .+= D[1](tmps[1], z[1]).*w.d[1] .+ D[2](tmps[2], z[1]).*w.d[2]
 
     # bottom row
-    out.d = (sum(dot(w[j], dxTdTs[j]) for j = 1:N)/N, dot(D[2](tmps[1], xT[N]), w[N]))
+    out.d = (sum(dot(w[j], dxTdTs[j]) for j = 1:N)/N, dot(D[2](tmps[1], xTs[N]), w[N]))
 
     return out
 end
