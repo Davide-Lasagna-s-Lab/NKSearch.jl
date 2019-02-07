@@ -32,7 +32,7 @@ export Options
     min_step::Float64       = 1e-4   # 
     tr_radius_init::Float64 = 1         # initial trust region radius
     tr_radius_max::Float64  = 10^8      # maximum trust region radius
-    eta::Float64 = 0.25                 # maximum trust region radius
+    eta::Float64 = 0.00                 # maximum trust region radius
 
     @assert method in (:tr_direct, :ls_direct, :ls_iterative, :tr_iterative)
     @assert skipiter > 0

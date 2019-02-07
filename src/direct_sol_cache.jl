@@ -73,9 +73,10 @@ function update!(dsm::DirectSolCache,
     op2(id) = (x, y, span)->(Ls[id](couple(x, y), span); S(y, s); y)
 
     # fill main block
-    @threads for i = 1:N
+    # @threads 
+    for i = 1:N
         # this thread id
-        id = threadid()
+        id = 1#threadid()
         
         # global indices where we will write
         rng = _blockrng(i, n)
@@ -108,9 +109,10 @@ function update!(dsm::DirectSolCache,
     end
 
     # right borders and right hand side
-    @threads for i = 1:N
+    # @threads 
+    for i = 1:N
         # id of current thread
-        id = threadid()
+        id = 1#threadid()
 
         # aliases
         _u1 = tmps[3*id]
