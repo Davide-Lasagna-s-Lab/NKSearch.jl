@@ -48,6 +48,12 @@ git-tree-sha1 = "49269e311ffe11ac5b334681d212329002a9832a"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
 version = "1.5.1"
 
+[[DataStructures]]
+deps = ["InteractiveUtils", "OrderedCollections", "Random", "Serialization", "Test"]
+git-tree-sha1 = "ca971f03e146cf144a9e2f2ce59674f5bf0e8038"
+uuid = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+version = "0.15.0"
+
 [[Dates]]
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -61,11 +67,11 @@ deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[Flows]]
-deps = ["LinearAlgebra", "Test"]
-git-tree-sha1 = "fe791b834a426cfdd81ac8cef579b76275c3a055"
+deps = ["DataStructures", "LinearAlgebra", "MacroTools"]
+git-tree-sha1 = "121ef2739f97a07c8afad3a917170b0f33055d6f"
 repo-rev = "master"
-repo-url = "https://github.com/gasagna/Flows.jl.git"
-uuid = "fa64469f-9273-5101-820a-a52743f26087"
+repo-url = "http://github.com/gasagna/Flows.jl"
+uuid = "d910d432-2c57-11e9-263c-df934de6853d"
 version = "0.0.0"
 
 [[GMRES]]
@@ -134,6 +140,12 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[[MacroTools]]
+deps = ["Compat"]
+git-tree-sha1 = "c443e1c8d58a4e9f61b708ad0a88286c7042145b"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.4.4"
 
 [[Markdown]]
 deps = ["Base64"]
