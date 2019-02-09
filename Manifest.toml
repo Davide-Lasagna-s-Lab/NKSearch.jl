@@ -76,7 +76,7 @@ version = "0.0.0"
 
 [[GMRES]]
 deps = ["Parameters", "Roots"]
-git-tree-sha1 = "bec347b51edc6f9aa6915646b7c6d2358e0130ea"
+git-tree-sha1 = "6ba332fd1c90cf4d6736e56f6a2969a710978ff4"
 repo-rev = "master"
 repo-url = "http://github.com/gasagna/GMRES.jl"
 uuid = "701a43e8-2c5a-11e9-2d86-e5d483bb0ff0"
