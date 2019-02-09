@@ -1,7 +1,7 @@
 name = "NKSearch"
-version = "0.0.0"
 uuid = "53bbc39a-2c58-11e9-14b8-a5180f719d78"
 authors = ["Davide Lasagna <davide.lasagna@soton.ac.uk>"]
+version = "0.0.0"
 
 [deps]
 Flows = "d910d432-2c57-11e9-263c-df934de6853d"
