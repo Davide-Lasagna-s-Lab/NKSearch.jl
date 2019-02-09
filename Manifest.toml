@@ -75,11 +75,11 @@ uuid = "d910d432-2c57-11e9-263c-df934de6853d"
 version = "0.0.0"
 
 [[GMRES]]
-deps = ["LinearAlgebra", "Printf", "Random", "Test"]
-git-tree-sha1 = "543b3ba2569a753ef4ef7df3c0d7c0b676848af8"
+deps = ["Parameters", "Roots"]
+git-tree-sha1 = "bec347b51edc6f9aa6915646b7c6d2358e0130ea"
 repo-rev = "master"
-repo-url = "https://github.com/gasagna/GMRES.jl.git"
-uuid = "8d58c00f-acb4-5fc1-a41a-7487991f9b9d"
+repo-url = "http://github.com/gasagna/GMRES.jl"
+uuid = "701a43e8-2c5a-11e9-2d86-e5d483bb0ff0"
 version = "0.0.0"
 
 [[HDF5]]
@@ -181,6 +181,12 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 [[Random]]
 deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[[Roots]]
+deps = ["Compat", "Printf"]
+git-tree-sha1 = "2e7171b6f3b58b81201ba37d9e1220aff6d904a1"
+uuid = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
+version = "0.7.4"
 
 [[SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
