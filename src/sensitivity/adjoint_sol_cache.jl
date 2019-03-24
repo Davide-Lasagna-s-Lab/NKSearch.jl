@@ -85,7 +85,7 @@ function make_adjoint_problem(G,
         rhs[i] .*= -1.0
     end
 
-    # we keep the last bits to zero too
+    # set the last bits such that adjoint solution is orthogonal to the vector field
     rhs.d = zero.(rhs.d)
 
     # last elements need shifting

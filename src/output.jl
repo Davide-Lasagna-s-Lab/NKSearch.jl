@@ -25,7 +25,7 @@ const _header_tr = "+------+--------+-----------+-----------+------------+------
                    "+------+--------+-----------+-----------+------------+-----------+\n"
 
 display_header_tr(io::IO, ::MVector{X, N, NS}) where {X, N, NS} = 
-    (print(_header_tr); flush(io))
+    (print(io, _header_tr); flush(io))
 
 # hookstep
 const _header_hks = "+------+--------+-----------+-------------+------------+-----------+-----------+----------+\n"*
@@ -33,7 +33,7 @@ const _header_hks = "+------+--------+-----------+-------------+------------+---
                     "+------+--------+-----------+-------------+------------+-----------+-----------+----------+\n"
 
 display_header_hks(io::IO, ::MVector{X, N, NS}) where {X, N, NS} = 
-    (print(_header_hks); flush(io))
+    (print(io, _header_hks); flush(io))
 
 # ~~~ DISPLAY FUNCTIONS ~~~
 
@@ -58,13 +58,13 @@ end
 # trust region
 function display_status_tr(io::IO, iter, which, dz_norm, e_norm, rho, tr_radius)
     str = @sprintf "|%4d  | %s | %5.3e | %5.3e | %+5.3e | %5.3e |" iter lpad(which, 6) dz_norm e_norm rho tr_radius
-    println(str)
-    flush(stdout)
+    println(io, str)
+    flush(io)
 end
 
 # trust region
 function display_status_hks(io::IO, iter, which, dz_norm, e_norm, rho, tr_radius, GMRES_res, GMRES_it)
     str = @sprintf "|%4d  | %s | %5.3e | %7.5e | %+5.3e | %5.3e | %5.3e | %8d |" iter lpad(which, 6) dz_norm e_norm rho tr_radius GMRES_res GMRES_it
-    println(str)
-    flush(stdout)
+    println(io, str)
+    flush(io)
 end
