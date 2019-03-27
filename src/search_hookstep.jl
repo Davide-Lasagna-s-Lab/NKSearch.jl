@@ -31,6 +31,12 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
 
     status = :maxiter_reached
 
+    # avoid doing work if tolerance is already satisfied
+    if e_norm <  opts.e_norm_tol
+        status = :converged
+        return
+    end
+
     # newton iterations loop
     for iter = 1:opts.maxiter
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
