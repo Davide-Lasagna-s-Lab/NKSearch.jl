@@ -28,9 +28,9 @@ function make_tangent_problem(G,
                               ϵ::Real=1e-6) where {X, N, NS}
 
     # make copies of the propagators, one for each thread
-    Gs = ntuple(i->deepcopy(G), 1)#nthreads())
-    Ls = ntuple(i->deepcopy(L), 1)#nthreads())
-    Js = ntuple(i->deepcopy(J), 1)#nthreads())
+    Gs = ntuple(i->deepcopy(G), nthreads())
+    Ls = ntuple(i->deepcopy(L), nthreads())
+    Js = ntuple(i->deepcopy(J), nthreads())
 
     # this stores the derivative of the discrete flow operator
     dxTdTs = similar.(z.x)
@@ -39,10 +39,10 @@ function make_tangent_problem(G,
     xTs    = similar.(z.x)
 
     # Construct temporaries
-    tmps = ntuple(i->similar(z[1]), 2)#2*nthreads())
+    tmps = ntuple(i->similar(z[1]), 2*nthreads())
 
     # monitors to store the state before the last step is made
-    mons = ntuple(i->Flows.StoreOneButLast(tmps[1]), 1)#nthreads())
+    mons = ntuple(i->Flows.StoreOneButLast(tmps[1]), nthreads())
 
     # the period and shift
     T, s = z.d
@@ -51,10 +51,9 @@ function make_tangent_problem(G,
     rhs = similar(z)
 
     # update initial and final states
-    # @threads 
-    for i = 1:N
+    @threads for i = 1:N
         # this thread ID
-        id = 1#threadid()
+        id = threadid()
 
         # set and propagate
         xTs[i] .= z[i]
@@ -77,9 +76,8 @@ function make_tangent_problem(G,
     # tangent state forward with the tangent state transition
     # operator that includes the forcing term
     rhs .*= 0
-    # @threads 
-    for i = 1:N
-        id = 1#threadid()
+    @threads for i = 1:N
+        id = threadid()
         tmps[id] .= z[i]
         Js[id](Flows.couple(tmps[id], rhs[i]), (0, T/N))
         rhs[i] .*= -1.0
@@ -129,9 +127,7 @@ function mul!(out::MVector{X, N, 2},
     end
 
     # period derivative
-    for i = 1:N
-        out[i] .+= dxTdTs[i].*(w.d[1]./N)
-    end
+    out[N] .+= dxTdTs[N].*w.d[1]
 
     # shift derivative
     out[N] .+= D[2](tmps[1], xTs[N]).*w.d[2]
