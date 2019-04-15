@@ -21,7 +21,7 @@ include("search_trustregion.jl")
 include("search_hookstep.jl")
 
 # sensitivity stuff
-# include("sensitivity/adjoint_sol_cache.jl")
+include("sensitivity/adjoint_sol_cache.jl")
 include("sensitivity/tangent_sol_cache.jl")
 
 end

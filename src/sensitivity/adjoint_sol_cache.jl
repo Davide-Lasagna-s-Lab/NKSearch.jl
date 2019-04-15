@@ -8,155 +8,147 @@ import Flows
 export make_adjoint_problem
 
 # ~~~ Matrix Type ~~~
-struct AdjointProblemLHS{X, N, NS, M, LST, SType, DType, CS}
+struct AdjointProblemLHS{X, N, NS, LST, ST, DT, CT}
         Ls::LST               # homogeneous adjoint operators (one per thread)
-         S::SType             # space shift operator
-         D::DType             # time (and space) derivative operator
-    dxTdTs::NTuple{N, X}      # time derivative of flow operator
-       xTs::NTuple{N, X}      # final points
-      tmps::NTuple{M, X}      # temporary storage
+         S::ST                # space shift operator
+         D::DT                # time (and space) derivative operator
+        x0::X                 # initial point
+        xT::X                 # final point
+     dxTdT::X                 # time derivative of flow operator
+       tmp::X                 # temporary storage
          z::MVector{X, N, NS} # the periodic orbit
-    caches::CS                # the stage caches for the adjoint integration
+     store::CT                # store
 end
 
 # Main outer constructor
-function make_adjoint_problem(G,
+function make_adjoint_problem(z::MVector{X, N, NS},
+                              store,
                               L,
                               J,
                               S,
                               D,
-                              z::MVector{X, N, NS},
-                          cache::Flows.AbstractStageCache,
-                              ϵ::Real) where {X, N, NS}
-                        
-    # Construct temporaries. The last element of tmps 
-    # is used to store the (shifted) final state. 
-    tmps = ntuple(i->similar(z[1]), 2*nthreads())
-
-    # this stores the derivative of the discrete flow operator
-    dxTdTs = similar.(z.x)
-     xTs   = similar.(z.x)
-
-    # monitors to store the state before the last step is made
-    mons = ntuple(i->Flows.StoreOneButLast(tmps[1]), nthreads())
-
-    # this will be the right hand side
-    rhs = similar(z)
-
-    # store all caches here
-    caches = ntuple(i->similar(cache), N)
-
-    # the period and shift
-    T, s = z.d
+                            jTJ::Real) where {X, N, NS}
 
     # make copies of the propagators
-    Gs = ntuple(i->deepcopy(G), nthreads())
     Js = ntuple(i->deepcopy(J), nthreads())
+    Ls = ntuple(i->deepcopy(L), nthreads())
 
-    # loop over all segments
+    # temporaries
+    tmp = similar(z[1])
+
+    # period and shift
+    T, s = z.d
+
+    # various points on the orbit
+     x0   =  store(similar(z[1]), 0, Val(0))
+     xT   =  store(similar(z[1]), T, Val(0))
+    dxTdT =  store(similar(z[1]), T, Val(1))
+
+    # right hand side
+    rhs = similar(z)
+
     @threads for i = 1:N
-        # this thread id
+        # note that store must be thread safe
         id = threadid()
 
-        # set initial condition
-        xTs[i] .= z[i]
+        # integration span
+        span = (T - (i-1)*T/N, T - i*T/N)
 
-        # propagate filling the cache and storing 
-        # the state before the last step
-        Gs[id](xTs[i], (0, T/N), caches[i], mons[id])
-
-        # Calculate derivative of the flow operator wrt T using
-        # centered finite difference. This just requires little
-        # computations, because we only propagate from the state
-        # before the last step is done
-        tmps[2*id] .= mons[id].x; tmps[2*id-1] .= mons[id].x;
-        Gs[id](tmps[2*id],   (mons[id].t, T/N + ϵ))
-        Gs[id](tmps[2*id-1], (mons[id].t, T/N - ϵ))
-        dxTdTs[i] .= 0.5.*(tmps[2*id] .- tmps[2*id-1])./ϵ
-    end
-
-    # construct right hand side by propagating an homogeneous
-    # adjoint state backwards with the adjoint state transition
-    # operator that includes the forcing term
-    @threads for i = 1:N
-        id = threadid()
+        # set homogeneus initial condition
         rhs[i] .= 0
-        Js[id](rhs[i], caches[i])
+
+        # propagate
+        Js[id](rhs[i], store, span)
+
+        # flip sign
         rhs[i] .*= -1.0
     end
 
-    # set the last bits such that adjoint solution is orthogonal to the vector field
-    rhs.d = zero.(rhs.d)
+    # shift the last state
+    S(rhs[N], -s)
 
-    # last elements need shifting
-    NS == 2 && (S(xTs[N], s); S(dxTdTs[N], s))
+    # set the last bits
+    vals = zeros(NS); vals[1] = jTJ
+    rhs.d = tuple(vals...)
 
     # construct object
-    AdjointProblemLHS(ntuple(i->deepcopy(L), nthreads()), S, D, 
-                      dxTdTs, xTs, tmps, z, caches), rhs
+    return AdjointProblemLHS(Ls, S, D, x0, xT, dxTdT, tmp, z, store), rhs
 end
-
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(A::AdjointProblemLHS{X}, w::MVector{X}) where {X} = mul!(similar(w), A, w)
 
 # Compute mat-vec product (version including one spatial shifts)
 function mul!(out::MVector{X, N, 2},
-                A::AdjointProblemLHS{X, N, 2},
+               mm::AdjointProblemLHS{X, N, 2},
                 w::MVector{X, N, 2}) where {X, N}
     # aliases
-    dxTdTs = A.dxTdTs
-    caches = A.caches
-    tmps   = A.tmps
-    xTs    = A.xTs
-    Ls     = A.Ls
-    D      = A.D
-    S      = A.S
-    z      = A.z
-    T, s   = z.d
+    store  = mm.store
+    x0     = mm.x0
+    xT     = mm.xT
+    dxTdT  = mm.dxTdT
+    Ls     = mm.Ls
+    D      = mm.D
+    S      = mm.S
+    z      = mm.z
+    tmp    = mm.tmp
+    T, s   = mm.z.d
 
     # main block
     @threads for i = 1:N
+        id = threadid()
+
+        # set adjoint final condition
         out[i] .= w[i]
+
+        # integration span
+        span = (T - (i-1)*T/N, T - i*T/N)
+
+        # integrate linearised equations
+        Ls[id](out[i], store, span)
+
+        # apply shift on last segment
         i == N && S(out[i], -s)
-        Ls[threadid()](out[i], caches[i])
-        out[i] .-= w[(i+N-2)%N + 1]
+
+        # this is the identity operator
+        out[i] .-= w[i%N + 1]
     end
 
-    # right column
-    out[1] .+= D[1](tmps[1], z[1]).*w.d[1] .+ D[2](tmps[2], z[1]).*w.d[2]
+    # right columns
+    out[N] .-= S(D[1](tmp, x0), -s).*w.d[1]
+    out[N] .-= S(D[2](tmp, x0), -s).*w.d[2]
 
-    # bottom row
-    out.d = (sum(dot(w[j], dxTdTs[j]) for j = 1:N)/N, dot(D[2](tmps[1], xTs[N]), w[N]))
+    # bottom rows
+    out.d = (dot(w[1], dxTdT), dot(w[1], D[2](tmp, xT)))
 
     return out
 end
 
 
-# Compute mat-vec product (version for no shifts)
-function mul!(out::MVector{X, N, 1},
-                A::AdjointProblemLHS{X, N, 1},
-                w::MVector{X, N, 1}) where {X, N}
-    # aliases
-    xT    = A.xT
-    Ls    = A.Ls
-    D     = A.D
-    z     = A.z
-    tmps   = A.tmps
-    dxTdTs = A.dxTdTs
+# # Compute mat-vec product (version for no shifts)
+# function mul!(out::MVector{X, N, 1},
+#                 A::AdjointProblemLHS{X, N, 1},
+#                 w::MVector{X, N, 1}) where {X, N}
+#     # aliases
+#     xT    = A.xT
+#     Ls    = A.Ls
+#     D     = A.D
+#     z     = A.z
+#     tmps   = A.tmps
+#     dxTdTs = A.dxTdTs
 
-    # main block
-    @threads for i = 1:N
-        out[i] .= w[i]
-        Ls[threadid()](out[i], caches[i])
-        out[i] .-= w[(i+N-2)%N + 1]
-    end
+#     # main block
+#     @threads for i = 1:N
+#         out[i] .= w[i]
+#         Ls[threadid()](out[i], caches[i])
+#         out[i] .-= w[(i+N-2)%N + 1]
+#     end
 
-    # right column
-    out[1] .+= D[1](tmps, z[1]).*w.d[1]
+#     # right column
+#     out[1] .+= D[1](tmps, z[1]).*w.d[1]
 
-    # bottom row
-    out.d = (sum(dot(w[j], dxTdTs[j]) for j = 1:N)/N, )
+#     # bottom row
+#     out.d = (sum(dot(w[j], dxTdTs[j]) for j = 1:N)/N, )
 
-    return out
-end
+#     return out
+# end
