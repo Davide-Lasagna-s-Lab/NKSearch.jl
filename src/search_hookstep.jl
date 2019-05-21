@@ -34,7 +34,7 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
     # avoid doing work if tolerance is already satisfied
     if e_norm <  opts.e_norm_tol
         status = :converged
-        return
+        return status
     end
 
     # newton iterations loop
