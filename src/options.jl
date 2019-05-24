@@ -30,6 +30,8 @@ export Options
 
     # trust_region algorithm parameters
     min_step::Float64       = 1e-4   # 
+    α::Float64              = 1
+    NR_lim::Float64         = 1e-8
     tr_radius_init::Float64 = 1         # initial trust region radius
     tr_radius_max::Float64  = 10^8      # maximum trust region radius
     eta::Float64 = 0.00                 # maximum trust region radius

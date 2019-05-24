@@ -52,7 +52,7 @@ function _search_trustregion!(Gs, Ls, S, D, z, cache, opts)
         # calc ratio
         rho = actual/predicted
 
-        if e_norm_curr > 1e-7
+        if e_norm_curr > opts.NR_lim
             # trust region update
             if rho < 1/4
                 tr_radius *= 1/4
@@ -68,7 +68,7 @@ function _search_trustregion!(Gs, Ls, S, D, z, cache, opts)
                 e_norm = e_norm_curr
             end
         else
-            z .= z .+ dz
+            z .= z .+ opts.α.*dz
             e_norm = e_norm_next
         end
 
