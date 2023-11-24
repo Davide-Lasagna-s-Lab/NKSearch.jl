@@ -160,10 +160,10 @@ function load_seeds!(fun, path::String) where {X}
         xs = []
 
         # determine if we saved complex data
-        is_complex_data = "seed_1_real" in names(file)
+        is_complex_data = "seed_1_real" in keys(file)
             
         # number of seeds
-        N = is_complex_data ? div(length(names(file)), 2) : length(names(file))
+        N = is_complex_data ? div(length(keys(file)), 2) : length(keys(file))
 
         # read real and imaginary part if we need so
         if is_complex_data
@@ -177,10 +177,10 @@ function load_seeds!(fun, path::String) where {X}
         end
         
         # and period and shifts (all those that start with d)
-        d = [read(attributes, el) for el in names(attributes) if startswith(el, "d")]
+        d = [read(attributes, el) for el in keys(attributes) if startswith(el, "d")]
 
         # also load other bits that might have been saved
-        for k in names(attributes)
+        for k in keys(attributes)
             if startswith(k, "other_")
                 dict[k[7:end]] = read(attributes, k)
             end
