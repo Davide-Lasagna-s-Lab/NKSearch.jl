@@ -147,7 +147,7 @@ function save_seeds(z::MVector{X, N, NS},
 end
 
 # load data and return a NamedTuple of other attributes that were stored
-function load_seeds!(fun, path::String) where {X}
+function load_seeds!(fun, path::String)
     h5open(path, "r") do file
         
         # load attributes handle
