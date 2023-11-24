@@ -177,12 +177,12 @@ function load_seeds!(fun, path::String)
         end
         
         # and period and shifts (all those that start with d)
-        d = [read(attributes, el) for el in keys(attributes) if startswith(el, "d")]
+        d = [attributes[el] for el in keys(attributes) if startswith(el, "d")]
 
         # also load other bits that might have been saved
         for k in keys(attributes)
             if startswith(k, "other_")
-                dict[k[7:end]] = read(attributes, k)
+                dict[k[7:end]] = attributes[k]
             end
         end
        
