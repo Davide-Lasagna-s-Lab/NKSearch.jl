@@ -3,7 +3,7 @@
 # ----------------------------------------------------------------- #
 
 import LinearAlgebra
-import HDF5: write, h5open, h5readattr, attrs
+import HDF5: write, h5open, h5readattr, attributes, read
 
 export MVector, 
        tovector,
@@ -100,7 +100,7 @@ function save(z::MVector{X, N, NS}, path::String) where {X, N, NS}
     h5open(path, "w") do file
         write(file, "seed", data)
         for i = 1:NS
-            attrs(file)["d$i"] = z.d[i]
+            attributes(file)["d$i"] = z.d[i]
         end
     end
 end
@@ -138,10 +138,10 @@ function save_seeds(z::MVector{X, N, NS},
             end
         end
         for i = 1:NS
-            attrs(file)["d$i"] = z.d[i]
+            attributes(file)["d$i"] = z.d[i]
         end
         for (k, v) in other
-            attrs(file)["other_$k"] = v
+            attributes(file)["other_$k"] = v
         end
     end
 end
@@ -151,7 +151,7 @@ function load_seeds!(fun, path::String)
     h5open(path, "r") do file
         
         # load attributes handle
-        attributes = attrs(file)
+        attrs = attributes(file)
 
         # load bit here
         dict = Dict{String, Any}()
@@ -177,12 +177,12 @@ function load_seeds!(fun, path::String)
         end
         
         # and period and shifts (all those that start with d)
-        d = [attributes[el] for el in keys(attributes) if startswith(el, "d")]
+        d = [read(attrs[el]) for el in keys(attrs) if startswith(el, "d")]
 
         # also load other bits that might have been saved
-        for k in keys(attributes)
+        for k in keys(attrs)
             if startswith(k, "other_")
-                dict[k[7:end]] = attributes[k]
+                dict[k[7:end]] = read(attrs[k])
             end
         end
        
