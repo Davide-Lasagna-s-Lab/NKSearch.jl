@@ -17,7 +17,7 @@ struct IterSolCache{X, N, NS, M, GST, LST, ST, DT, MT}
       tmp::NTuple{M, X}      # temporary storage
        z0::MVector{X, N, NS} # current orbit
      mons::MT                # monitor
-     opts::Options           #
+     opts::Options           # options
 end
 
 # Main outer constructor

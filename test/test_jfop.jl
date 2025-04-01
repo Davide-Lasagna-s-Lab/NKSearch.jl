@@ -7,12 +7,12 @@
 
     # define propagators
     G = flow(F,
-             RK4(zeros(2), :NORMAL),
+             RK4(zeros(2), Flows.NormalMode()),
              TimeStepConstant(1e-3))
 
     # exact linearised propagator
     LEX = flow(couple(F, D),
-             RK4(couple(zeros(2), zeros(2)), :NORMAL),
+             RK4(couple(zeros(2), zeros(2)), Flows.NormalMode()),
              TimeStepConstant(1e-3))
 
     # finite difference approximation

@@ -6,10 +6,10 @@
 
     # define propagators
     G = flow(F,
-             RK4(zeros(2), :NORMAL),
+             RK4(zeros(2), Flows.NormalMode()),
              TimeStepConstant(1e-3))
     L = flow(couple(F, D),
-             RK4(couple(zeros(2), zeros(2)), :NORMAL),
+             RK4(couple(zeros(2), zeros(2)), Flows.NormalMode()),
              TimeStepConstant(1e-3))
 
     for method in (:tr_direct,
