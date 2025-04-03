@@ -41,11 +41,11 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
     for iter = 1:opts.maxiter
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # UPDATE CACHE
-        update!(cache, dz, z, opts)
+        update!(cache, b, z, opts)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # SOLVE TRUST REGION PROBLEM
-        hits_boundary, which, step, gmres_res, gmres_it = solve_tr_subproblem!(dz, z, cache, tr_radius, opts)
+        hits_boundary, which, step, gmres_res, gmres_it = solve_tr_subproblem!(dz, b, z, cache, tr_radius, opts)
 
         # calc actual reductions
         e_norm_curr = e_norm_λ(Gs, S, z, dz, 0.0, tmps)
@@ -111,24 +111,24 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
 end
 
 # Solve the Trust Region optimisation subproblem
-function solve_tr_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+function solve_tr_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
 
     if opts.method == :tr_direct
-        return solve_dogleg_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+        return solve_dogleg_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     end
 
     if opts.method == :tr_iterative
-        return solve_hookstep_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+        return solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     end
 
     # this should not happen as we restrict the method in the Options struct
     throw(ArgumentError("panic!"))
 end
 
-function solve_hookstep_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
-    
+function solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     # solve optimisation problem (this is always using GMRES)
-    dz, res_err_norm, n_iter = _solve(cache, dz, tr_radius, opts)
+    dz .*= 0.0 # TODO: better initial guess?
+    dz, res_err_norm, n_iter = _solve(dz, cache, b, tr_radius, opts)
 
     # we consider a newton step only if we are within the trust region
     # and we have managed to reduce the error at least as much as required
@@ -144,21 +144,21 @@ function solve_hookstep_subproblem!(dz::MVector, z::MVector, cache, tr_radius::R
     end
 end
 
-function solve_dogleg_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
-    
+function solve_dogleg_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     # ~~~ GET NEWTON STEP ~~~
-    dz_N, res_err_norm = _solve(cache, copy(dz), opts)
+    dz .*= 0.0
+    dz, res_err_norm = _solve(dz, cache, b, opts)
 
     if norm(dz_N) < tr_radius
-        dz .= dz_N
         return false, :newton, 1.0, 0.0, 0
     end
+    dz_N = copy(dz)
 
     # ~~~ GET CAUCHY STEP ~~~
-    grad = cache.A'*tovector(dz)
+    grad = cache.A'*tovector(b)
     den  = cache.A*grad
 
-    dz_C = fromvector!(copy(dz), grad)
+    dz_C = fromvector!(copy(b), grad)
     dz_C .*= (norm(grad)/norm(den))^2
 
     if norm(dz_C) > tr_radius

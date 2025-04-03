@@ -35,11 +35,11 @@ function _search_trustregion!(Gs, Ls, S, D, z, cache, opts)
     for iter = 1:opts.maxiter
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # UPDATE CACHE
-        update!(cache, dz, z, opts)
+        update!(cache, b, z, opts)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # SOLVE TRUST REGION PROBLEM
-        hits_boundary, which, step = solve_tr_subproblem!(dz, z, cache, tr_radius, opts)
+        hits_boundary, which, step = solve_tr_subproblem!(dz, b, z, cache, tr_radius, opts)
 
         # calc actual reductions
         e_norm_curr = e_norm_λ(Gs, S, z, dz, 0.0, tmps)

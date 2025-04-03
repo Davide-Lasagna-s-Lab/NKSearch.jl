@@ -123,8 +123,8 @@ _is_complex_eltype(z::MVector) = eltype(parent(z[1])) <: Complex
 
 # save MVector to file, including other 
 function save_seeds(z::MVector{X, N, NS},
-                 path::String,
-                other::Dict{String, <:Any} = Dict{String, Any}()) where {X, N, NS}
+                    path::String,
+                    other::Dict{String, <:Any} = Dict{String, Any}()) where {X, N, NS}
     # test whether X is a complex type
     h5open(path, "w") do file
         if _is_complex_eltype(z)
@@ -175,7 +175,7 @@ function load_seeds!(fun, path::String)
                 push!(xs, read(file, "seed_$i"))
             end
         end
-        
+
         # and period and shifts (all those that start with d)
         d = [read(attrs[el]) for el in keys(attrs) if startswith(el, "d")]
 
@@ -185,7 +185,7 @@ function load_seeds!(fun, path::String)
                 dict[k[7:end]] = read(attrs[k])
             end
         end
-       
+
         return MVector(tuple(xs...), d...), dict
     end
 end

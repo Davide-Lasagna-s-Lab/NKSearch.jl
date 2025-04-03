@@ -8,11 +8,12 @@ import Flows: couple
 
 
 # Apply operator op{u}*v to every column v of the identity matrix
+# ! this function doesn't work if a complex valued array type is passed
 function op_apply_eye!(out::Matrix{T},
                        op,
                        u::X,
                        span::Tuple{Real, Real},
-                       _u::X, _v::X) where {T, X<:AbstractVector{T}}
+                       _u::X, _v::X) where {T, X}
     n = length(u)
     @inbounds for i = 1:n
         _u    .= u
@@ -36,7 +37,7 @@ end
 
 function DirectSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
     n = length(z0[1])
-    m = N *n + NS
+    m = N*n + NS
     DirectSolCache(Gs,
                    Ls,
                    S,
@@ -85,6 +86,7 @@ function update!(dsm::DirectSolCache,
         if NS == 2 && i == N
             op_apply_eye!(Ys[id], op2(id), z0[i], (0, T/N), tmps[3*id], tmps[3*id-1])
         else
+            # ! this passes FTField objects when it needs to be passing vectors
             op_apply_eye!(Ys[id], op1(id), z0[i], (0, T/N), tmps[3*id], tmps[3*id-1])
         end
         A[rng, rng] .= Ys[id]
@@ -155,5 +157,5 @@ end
 
 
 # solution for direct method
-_solve(dsm::DirectSolCache, b::MVector, opts::Options) =
-    (fromvector!(b, ldiv!(lu(dsm.A), tovector(b))), 0.0)
+_solve(dz::MVector, dsm::DirectSolCache, b::MVector, opts::Options) =
+    (fromvector!(dz, ldiv!(lu(dsm.A), tovector(b))), 0.0)
