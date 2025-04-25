@@ -139,9 +139,11 @@ end
 _solve(x::MV, A::IterSolCache, b::MV, opts::Options) where {MV<:MVector} =
     gmres!(x, A, b; rel_rtol=opts.gmres_rtol,
                  maxiter=opts.gmres_maxiter,
-                 verbose=opts.gmres_verbose)
+                 verbose=opts.gmres_verbose,
+                 trace=opts.gmres_trace)
 
 _solve(x::MV, A::IterSolCache, b::MVector, tr_radius::Real, opts::Options) where {MV<:MVector} =
     gmres!(x, A, b, tr_radius; rel_rtol=opts.gmres_rtol,
                             maxiter=opts.gmres_maxiter,
-                            verbose=opts.gmres_verbose)
+                            verbose=opts.gmres_verbose,
+                            trace=opts.gmres_trace)
