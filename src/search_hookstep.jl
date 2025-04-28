@@ -4,6 +4,8 @@
 import Base.Threads: nthreads
 using Printf
 
+# gmres_initial::WS = dz->(dz .*= 0.0; dz)
+
 # trust region method implementation
 function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
     # display nice header
@@ -11,7 +13,7 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
 
     # allocate memory
     b    = similar(z)                           # right hand side
-    dz   = similar(z)                           # temporary
+    dz   = similar(z); dz .*= 0.0               # temporary
     tmps = ntuple(i->similar(z[1]), nthreads()) # one temporary for each thread
 
     # calculate initial error
@@ -45,7 +47,7 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # SOLVE TRUST REGION PROBLEM
-        hits_boundary, which, step, gmres_res, gmres_it = solve_tr_subproblem!(dz, b, z, cache, tr_radius, opts)
+        hits_boundary, which, step, gmres_res, gmres_it = solve_tr_subproblem!(opts.gmres_start(dz), b, z, cache, tr_radius, opts)
 
         # calc actual reductions
         e_norm_curr = e_norm_λ(Gs, S, z, dz, 0.0, tmps)
@@ -127,7 +129,6 @@ end
 
 function solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     # solve optimisation problem (this is always using GMRES)
-    dz .*= 0.0 # TODO: better initial guess?
     dz, res_err_norm, n_iter = _solve(dz, cache, b, tr_radius, opts)
 
     # we consider a newton step only if we are within the trust region
@@ -146,7 +147,6 @@ end
 
 function solve_dogleg_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     # ~~~ GET NEWTON STEP ~~~
-    dz .*= 0.0
     dz, res_err_norm = _solve(dz, cache, b, opts)
 
     if norm(dz_N) < tr_radius

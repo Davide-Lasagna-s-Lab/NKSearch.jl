@@ -34,7 +34,8 @@
                         verbose=false,
                         tr_radius_init=0.001,
                         method=method,
-                        ϵ=1e-7))
+                        ϵ=1e-7,
+                        gmres_start=dz->dz))
 
         # solution is a loop of unit radius and with T = 2π
         @test maximum( map(el->norm(el)-1, z.x) ) < 1e-9
