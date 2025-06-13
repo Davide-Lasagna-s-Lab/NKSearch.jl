@@ -38,7 +38,7 @@ function make_tangent_problem(z::MVector{X, N, NS},
     if NS == 2
         T, s = z.d
     else
-        T, = z.d
+        T,   = z.d
     end
 
     # get last point on the orbit and obtain its time derivative 
@@ -74,7 +74,7 @@ function make_tangent_problem(z::MVector{X, N, NS},
     return TangentProblemLHS(Ls, S, D, x0, xT, dxTdT, tmp, z, store), rhs
 end
 
-# outer constructor which doesn't include shift
+# outer constructor without shift
 make_tangent_problem(z::MVector{X, N, 1},
                      store,
                      L,
@@ -94,17 +94,17 @@ function mul!(out::MVector{X, N, NS},
               mm::TangentProblemLHS{X, N, NS},
               w::MVector{X, N, NS}) where {X, N, NS}
     # aliases
-    store  = mm.store
-    x0     = mm.x0
-    xT     = mm.xT
-    dxTdT  = mm.dxTdT
-    Ls     = mm.Ls
-    D      = mm.D
-    S      = mm.S
-    z      = mm.z
-    tmp    = mm.tmp
-    T      = mm.z.d[1]
-    s      = NS == 2 ? mm.z.d[2] : 0.0
+    store = mm.store
+    x0    = mm.x0
+    xT    = mm.xT
+    dxTdT = mm.dxTdT
+    Ls    = mm.Ls
+    D     = mm.D
+    S     = mm.S
+    z     = mm.z
+    tmp   = mm.tmp
+    T     = mm.z.d[1]
+    s     = NS == 2 ? mm.z.d[2] : 0.0
 
     # compute L{x0[i]}⋅w[i] - w[i+1]
     @threads for i = 1:N
@@ -121,7 +121,7 @@ function mul!(out::MVector{X, N, NS},
         Ls[id](out[i], store, span)
 
         # apply shift on last segment
-        NS == 2 && i == N && S(out[i], mm.z.d[2])
+        NS == 2 && i == N && S(out[i], s)
 
         # this is the identity operators on the upper diagonal
         out[i] .-= w[i%N + 1]
