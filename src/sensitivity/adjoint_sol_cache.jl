@@ -52,7 +52,7 @@ function make_adjoint_problem(z::MVector{X, N, NS},
     # right hand side
     rhs = similar(z)
 
-    @threads for i = 1:N
+    @threads :static for i = 1:N
         # note that store must be thread safe
         id = threadid()
 
@@ -113,7 +113,7 @@ function mul!(out::MVector{X, N, NS}, mm::AdjointProblemLHS{X, N, NS}, w::MVecto
     s     = NS == 2 ? mm.z.d[2] : 0.0
 
     # main block
-    @threads for i = 1:N
+    @threads :static for i = 1:N
         id = threadid()
 
         # set adjoint final condition

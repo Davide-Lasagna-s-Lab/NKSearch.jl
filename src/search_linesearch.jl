@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-import Base.Threads: threadid, @threads, nthreads, atomic_add!, Atomic
+import Base.Threads: threadid, @threads, @spawn, nthreads, atomic_add!, Atomic
 import LinearAlgebra: norm
 import Flows
 
@@ -70,12 +70,39 @@ function e_norm_λ(Gs::NTuple{NT},
                   δz::MVector{X, N, NS},
                    λ::Real,
                 tmps::NTuple{NT, X}) where {X, N, NS, NT}
-
     # store reduction here
     out = Atomic{Float64}(0.0)
+    # out = 0.0
+
+    # # how many thread loops to compute all segments
+    # M = ceil(Int, NS/nthreads())
+
+    # # sum all error contributions
+    # for _ in 1:M
+    #     tasks = map(Gs, tmps, z0.x, δz.x) do G, tmp, z0i, δzi
+    #         @spawn begin
+    #             tmp .= z0i .+ λ.*δzi
+
+    #             # actual propagation
+    #             G(tmp, (0, (z0.d[1] + λ*δz.d[1])/N))
+
+    #             # last segment is shifted (if we have a shift)
+    #             NS == 2 && i == N && S(tmp, z0.d[2] + λ*δz.d[2])
+
+    #             # calc difference
+    #             tmp .-= z0[i%N+1] .+ λ.*δz[i%N+1]
+
+    #             # atomic add to error
+    #             return norm(tmp)^2
+    #         end
+    #     end
+    #     out += sum(fetch.(tasks))
+    # end
+
+    # return out
 
     # sum all error contributions
-    @threads for i = 1:N
+    @threads :static for i = 1:N
         # this thread id
         id = threadid()
 

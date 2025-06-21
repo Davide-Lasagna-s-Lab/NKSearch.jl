@@ -49,7 +49,7 @@ function make_tangent_problem(z::MVector{X, N, NS},
     # right hand side
     rhs = similar(z)
 
-    @threads for i = 1:N
+    @threads :static for i = 1:N
         # note that store must be thread safe
         id = threadid()
 
@@ -107,7 +107,7 @@ function mul!(out::MVector{X, N, NS},
     s     = NS == 2 ? mm.z.d[2] : 0.0
 
     # compute L{x0[i]}⋅w[i] - w[i+1]
-    @threads for i = 1:N
+    @threads :static for i = 1:N
         # this thread id
         id = threadid()
 

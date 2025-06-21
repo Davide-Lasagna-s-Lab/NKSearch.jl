@@ -49,7 +49,7 @@ function mul!(out::MVector{X, N, NS},
     ϵ     = mm.opts.ϵ
 
     # compute L{x0[i]}⋅δz[i] - δz[i+1]
-    @threads for i = 1:N
+    @threads :static for i = 1:N
         # this thread id
         id = threadid()
 
@@ -103,7 +103,7 @@ function update!(mm::IterSolCache{X, N, NS},
     mons  = mm.mons
 
     # update initial and final states
-    @threads for i = 1:N
+    @threads :static for i = 1:N
         # this thread ID
         id = threadid()
 

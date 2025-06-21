@@ -5,6 +5,11 @@ import Base.Threads: nthreads
 
 export search!
 
+# NOTE: multithreading only works reliably (no race conditions) if the number of threads
+# NOTE: equals the number of segments used for the multiple-shooting.
+# NOTE: See https://julialang.org/blog/2023/07/PSA-dont-use-threadid/ for details
+# NOTE: on the faulty pattern that is being used that causes the problems encountered.
+
 # Arguments
 # ---------
 # G    : nonlinear propagator  - obeys `G(x, (0, T))` where `x` is modified in place
