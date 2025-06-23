@@ -25,7 +25,7 @@ IterSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
     IterSolCache(Gs, Ls, S, D,
                  similar.(z0.x),
                  similar.(z0.x),
-                 ntuple(i->similar(z0[1]), 2*nthreads() + 2),
+                 ntuple(i->similar(z0[1]), nthreads()),
                  similar(z0),
                  ntuple(i->Flows.StoreOneButLast(z0[1]), nthreads()),
                  opts)
@@ -113,12 +113,9 @@ function update!(mm::IterSolCache{X, N, NS},
 
         # finite difference derivative of flow operator
         # see https://epubs.siam.org/doi/10.1137/070705623 page 27
-        tmp[2*id  ] .= mons[id].x;
-        tmp[2*id-1] .= mons[id].x;
-        Gs[id](tmp[2*id  ], (mons[id].t, T/N + ϵ))
-        # ! this can cause a bug since mons[id].t < T/N - ϵ
-        Gs[id](tmp[2*id-1], (mons[id].t, T/N - ϵ))
-        dxTdT[i] .= 0.5.*(tmp[2*id] .- tmp[2*id-1])./ϵ
+        tmp[id] .= mons[id].x;
+        Gs[id](tmp[id], (mons[id].t, T/N + ϵ))
+        dxTdT[i] .= (tmp[id] .- mons[id].x)./ϵ
     end
 
     # last one (may) get shifted
