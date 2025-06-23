@@ -27,7 +27,7 @@ IterSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
                  similar.(z0.x),
                  ntuple(i->similar(z0[1]), nthreads()),
                  similar(z0),
-                 ntuple(i->Flows.StoreOneButLast(z0[1]), nthreads()),
+                 ntuple(i->Flows.StoreOnlyLast(z0[1]), nthreads()),
                  opts)
 
 # Main interface is matrix-vector product exposed to the Krylov solver

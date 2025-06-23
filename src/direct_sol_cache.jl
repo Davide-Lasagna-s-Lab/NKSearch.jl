@@ -45,7 +45,7 @@ function DirectSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, 
                    spzeros(m, m),
                    ntuple(i->zeros(n, n), nthreads()),
                    ntuple(i->similar(z0[1]), 3*nthreads()), 
-                   ntuple(i->Flows.StoreOneButLast(z0[1]), nthreads()))
+                   ntuple(i->Flows.StoreOnlyLast(z0[1]), nthreads()))
 end
 
 Base.:*(dsm::DirectSolCache, dz::MVector) = fromvector!(similar(dz), dsm.A*tovector(dz))
