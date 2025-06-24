@@ -19,6 +19,9 @@ export Options, GMRESTrace
     verbose::Bool           = true                 # print iteration status
     dz_norm_tol::Float64    = 1e-10                # tolerance on correction
     e_norm_tol::Float64     = 1e-10                # tolerance on residual
+    fd_order::Int           = 2                    # use forward or central difference scheme
+                                                   # to approximate the derivative of the flow
+                                                   # operator
     ϵ::Float64              = 1e-6                 # dt for finite difference approximation
                                                    # of the derivative of the flow operator
     # line search parameters
@@ -42,4 +45,5 @@ export Options, GMRESTrace
 
     @assert method in (:tr_direct, :ls_direct, :ls_iterative, :tr_iterative)
     @assert skipiter > 0
+    @assert fd_order in (1, 2)
 end

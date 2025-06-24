@@ -6,6 +6,8 @@ import LinearAlgebra: dot
 import GMRES: gmres!
 import Flows
 
+# TODO: move sensitivity analysis to a different package
+
 # ~~~ Matrix Type ~~~
 struct TangentProblemLHS{X, N, NS, LST, ST, DT, CT}
        Ls::LST               # linearised flow operator(s)

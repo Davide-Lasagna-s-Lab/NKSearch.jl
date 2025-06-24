@@ -21,14 +21,17 @@ struct IterSolCache{X, N, NS, M, GST, LST, ST, DT, MT}
 end
 
 # Main outer constructor
-IterSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS} =
+function IterSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
+    mon_type = opts.fd_order == 1 ? Flows.StoreNFromLast{0} : Flows.StoreNFromLast{2}
+    ntmps = opts.fd_order == 1 ? nthreads() : 2*nthreads()
     IterSolCache(Gs, Ls, S, D,
                  similar.(z0.x),
                  similar.(z0.x),
-                 ntuple(i->similar(z0[1]), nthreads()),
+                 ntuple(i->similar(z0[1]), ntmps),
                  similar(z0),
-                 ntuple(i->Flows.StoreOnlyLast(z0[1]), nthreads()),
+                 ntuple(i->mon_type(z0[1]), nthreads()),
                  opts)
+end
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(mm::IterSolCache{X}, δz::MVector{X}) where {X} = mul!(similar(δz), mm, δz)
@@ -114,8 +117,14 @@ function update!(mm::IterSolCache{X, N, NS},
         # finite difference derivative of flow operator
         # see https://epubs.siam.org/doi/10.1137/070705623 page 27
         tmp[id] .= mons[id].x;
+        opts.fd_order == 2 && tmp[2*id] .= mons[id].x
         Gs[id](tmp[id], (mons[id].t, T/N + ϵ))
-        dxTdT[i] .= (tmp[id] .- mons[id].x)./ϵ
+        opts.fd_order == 2 && Gs[id](tmp[2*id], (mons[id].t, T/N - ϵ))
+        if opts.fd_order == 2
+            dxTdT[i] .= (tmp[id] .- tmp[2*id])./(2*ϵ)
+        else
+            dxTdT[i] .= (tmp[id] .- mons[id].x)./ϵ
+        end
     end
 
     # last one (may) get shifted

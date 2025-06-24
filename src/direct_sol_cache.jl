@@ -36,16 +36,18 @@ struct DirectSolCache{GST, LST, ST, DT, YST, TMPST, MONST}
 end
 
 function DirectSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
+    nthreads() > 1 && printstyled("DirectSolCache is not properly implemented with multithreading!", color=:red)
     n = length(z0[1])
     m = N*n + NS
+    mon_type = opts.fd_order == 1 ? StoreNFromLast{0} : StoreNFromLast{2}
     DirectSolCache(Gs,
                    Ls,
                    S,
                    D,
                    spzeros(m, m),
                    ntuple(i->zeros(n, n), nthreads()),
-                   ntuple(i->similar(z0[1]), 3*nthreads()), 
-                   ntuple(i->Flows.StoreOnlyLast(z0[1]), nthreads()))
+                   ntuple(i->similar(z0[1]), 3*nthreads()),
+                   ntuple(i->mon_type(z0[1]), nthreads()))
 end
 
 Base.:*(dsm::DirectSolCache, dz::MVector) = fromvector!(similar(dz), dsm.A*tovector(dz))
@@ -127,10 +129,14 @@ function update!(dsm::DirectSolCache,
 
         # calc derivative of flow operator
         _u1 .= mons[id].x
-        _u2 .= mons[id].x;
+        opts.fd_order == 2 && _u2 .= mons[id].x;
         Gs[id](_u1, (mons[id].t, T/N + opts.ϵ))
-        Gs[id](_u2, (mons[id].t, T/N - opts.ϵ))
-        _u2 .= 0.5.*(_u1 .- _u2)./opts.ϵ
+        opts.fd_order == 2 && Gs[id](_u2, (mons[id].t, T/N - opts.ϵ))
+        if opts.fd_order == 2
+            _u2 .= 0.5.*(_u1 .- _u2)./opts.ϵ
+        else
+            _u2 .= (_u1 .- mons[id].x)./opts.ϵ
+        end
 
         #apply shift if needed
         NS == 2 && i == N && S(_u2, s)
