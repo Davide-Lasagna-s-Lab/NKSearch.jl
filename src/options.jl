@@ -9,8 +9,7 @@ import GMRES: GMRESTrace
 export Options, GMRESTrace
 
 # ~~~ SEARCH OPTIONS FOR NEWTON ITERATIONS ~~~
-
-@with_kw struct Options{GT<:Union{Nothing, GMRESTrace}, W}
+@with_kw struct Options{GT<:Union{Nothing, GMRESTrace}, W, CB}
     # generic parameters
     method::Symbol          = :ls_direct           # search method
     maxiter::Int            = 10                   # maximum newton iteration number
@@ -24,6 +23,10 @@ export Options, GMRESTrace
                                                    # operator
     ϵ::Float64              = 1e-6                 # dt for finite difference approximation
                                                    # of the derivative of the flow operator
+    callback::CB            = (iter, z)->false     # function called at the end of each
+                                                   # iteration, if it returns true then the
+                                                   # search terminates
+
     # line search parameters
     ls_maxiter::Int         = 10                   # maximum number of line search iterations
     ls_rho::Float64         = 0.5                  # line search step reduction factor

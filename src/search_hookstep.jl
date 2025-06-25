@@ -4,8 +4,6 @@
 import Base.Threads: nthreads
 using Printf
 
-# gmres_initial::WS = dz->(dz .*= 0.0; dz)
-
 # trust region method implementation
 function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
     # display nice header
@@ -41,6 +39,9 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
 
     # newton iterations loop
     for iter = 1:opts.maxiter
+        # callback
+        opts.callback(iter, z) && (status = :callback_satisfied; break)
+
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # UPDATE CACHE
         update!(cache, b, z, opts)
