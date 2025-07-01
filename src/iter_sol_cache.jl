@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-import Base.Threads: threadid, @threads, nthreads
+import Base.Threads: @sync, @spawn
 import LinearAlgebra: dot
 import GMRES: gmres!
 import Flows
@@ -23,13 +23,13 @@ end
 # Main outer constructor
 function IterSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
     mon_type = opts.fd_order == 1 ? Flows.StoreNFromLast{0} : Flows.StoreNFromLast{2}
-    ntmps = opts.fd_order == 1 ? nthreads() : 2*nthreads()
+    ntmps = opts.fd_order == 1 ? nsegments(z0) : 2*nsegments(z0)
     IterSolCache(Gs, Ls, S, D,
                  similar.(z0.x),
                  similar.(z0.x),
                  ntuple(i->similar(z0[1]), ntmps),
                  similar(z0),
-                 ntuple(i->mon_type(z0[1]), nthreads()),
+                 ntuple(i->mon_type(z0[1]), nsegments(z0)),
                  opts)
 end
 
@@ -49,27 +49,25 @@ function mul!(out::MVector{X, N, NS},
     tmp   = mm.tmp
     dxTdT = mm.dxTdT
     T     = mm.z0.d[1]
-    ϵ     = mm.opts.ϵ
 
-    # compute L{x0[i]}⋅δz[i] - δz[i+1]
-    @threads :static for i = 1:N
-        # this thread id
-        id = threadid()
+    # comput L{x0[i]}-δz[i] - δz[i+1]
+    @sync for i in 1:N
+        @spawn begin
+            # set perturbation initial condition
+            out[i] .= δz[i]
 
-        # set perturbation initial condition
-        out[i] .= δz[i]
+            # set nonlinear initial condition
+            tmp[i] .= z0[i]
 
-        # set nonlinear initial condition
-        tmp[id] .= z0[i]
+            # propagate by T/N
+            Ls[i](Flows.couple(tmp[i], out[i]), (0, T/N))
 
-        # propagate by T/N
-        Ls[id](Flows.couple(tmp[id], out[i]), (0, T/N))
+            # apply shift on last segment (if we have one)
+            NS == 2 && i == N && S(out[i], z0.d[2])
 
-        # apply shift on last segment (if we have one)
-        NS == 2 && i == N && S(out[i], z0.d[2])
-
-        # this is the identity operators on the upper diagonal
-        out[i] .-= δz[i%N + 1]
+            # this is the identity operators on the upper diagonal
+            out[i] .-= δz[i%N + 1]
+        end
     end
 
     # period derivative
@@ -105,25 +103,23 @@ function update!(mm::IterSolCache{X, N, NS},
     T     = z0.d[1]
     mons  = mm.mons
 
-    # update initial and final states
-    @threads :static for i = 1:N
-        # this thread ID
-        id = threadid()
+    @sync for i in 1:N
+        @spawn begin
+            # set and propagate
+            xT[i] .= z0[i]
+            Gs[i](xT[i], (0, T/N), mons[i])
 
-        # set and propagate
-        xT[i] .= z0[i]
-        Gs[id](xT[i], (0, T/N), mons[id])
-
-        # finite difference derivative of flow operator
-        # see https://epubs.siam.org/doi/10.1137/070705623 page 27
-        tmp[id] .= mons[id].x;
-        opts.fd_order == 2 && tmp[2*id] .= mons[id].x
-        Gs[id](tmp[id], (mons[id].t, T/N + ϵ))
-        opts.fd_order == 2 && Gs[id](tmp[2*id], (mons[id].t, T/N - ϵ))
-        if opts.fd_order == 2
-            dxTdT[i] .= (tmp[id] .- tmp[2*id])./(2*ϵ)
-        else
-            dxTdT[i] .= (tmp[id] .- mons[id].x)./ϵ
+            # finite difference derivative of flow operator
+            # see https://epubs.siam.org/doi/10.1137/070705623 page 27
+            tmp[i] .= mons[i].x;
+            opts.fd_order == 2 && tmp[2*i] .= mons[i].x
+            Gs[i](tmp[i], (mons[i].t, T/N + ϵ))
+            opts.fd_order == 2 && Gs[i](tmp[2*i], (mons[i].t, T/N - ϵ))
+            if opts.fd_order == 2
+                dxTdT[i] .= (tmp[i] .- tmp[2*i])./(2*ϵ)
+            else
+                dxTdT[i] .= (tmp[i] .- mons[i].x)./ϵ
+            end
         end
     end
 

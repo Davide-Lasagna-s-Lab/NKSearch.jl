@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-import Base.Threads: threadid, @threads, @spawn, nthreads, atomic_add!, Atomic
+import Base.Threads: @sync, @spawn, atomic_add!, Atomic
 import LinearAlgebra: norm
 import Flows
 
@@ -64,62 +64,32 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
     return nothing
 end
 
-function e_norm_λ(Gs::NTuple{NT},
+function e_norm_λ(Gs::NTuple{N},
                     S,
                    z0::MVector{X, N, NS},
                    δz::MVector{X, N, NS},
                     λ::Real,
-                 tmps::NTuple{NT, X}) where {X, N, NS, NT}
+                 tmps::NTuple{N, X}) where {X, N, NS}
     # error output
     out = Atomic{Float64}(0.0)
 
     # loop over segments summing the error
-    for i in 1:(N ÷ NT)
-        @sync for it in 1:NT
-            @spawn begin
-                # shooting iteration
-                is = it + NT*(i - 1)
+    @sync for i in 1:N
+        @spawn begin
+            # set initial condition
+            tmps[i] .= z0[i] .+ λ.*δz[i]
 
-                # set initial condition
-                tmps[it] .= z0[is] .+ λ.*δz[is]
+            # actual propagation
+            Gs[i](tmps[i], (0, (z0.d[1] + λ*δz.d[1])/N))
 
-                # actual propagation
-                Gs[it](tmps[it], (0, (z0.d[1] + λ*δz.d[1])/N))
+            # last segment is shifted (if we have a shift)
+            NS == 2 && i == N && S(tmps[i], z0.d[2] + λ*δz.d[2])
 
-                # last segment is shifted (if we have a shift)
-                NS == 2 && is == N && S(tmps[it], z0.d[2] + λ*δz.d[2])
+            # calc difference
+            tmps[i] .-= z0[i%N + 1] .+ λ.*δz[i%N + 1]
 
-                # calc difference
-                tmps[it] .-= z0[is%N + 1] .+ λ.*δz[is%N + 1]
-
-                # add to error
-                atomic_add!(out, norm(tmps[it])^2)
-            end
-        end
-    end
-
-    # take of final segments less than available threads
-    if (M = N%NT) != 0
-        @sync for it in 1:M
-            @spawn begin
-                # shooting iteration
-                is = N - M + it
-
-                # set initial condition
-                tmps[it] .= z0[is] .+ λ.*δz[is]
-
-                # actual propagation
-                Gs[it](tmps[it], (0, (z0.d[1] + λ*δz.d[1])/N))
-
-                # last segment is shifted (if we have a shift)
-                NS == 2 && is == N && S(tmps[it], z0.d[2] + λ*δz.d[2])
-
-                # calc difference
-                tmps[it] .-= z0[is%N + 1] .+ λ.*δz[is%N + 1]
-
-                # add to error
-                atomic_add!(out, norm(tmps[it])^2)
-            end
+            # add to error
+            atomic_add!(out, norm(tmps[i])^2)
         end
     end
 
