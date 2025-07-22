@@ -90,7 +90,7 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
                                dz_norm,
                                e_norm,
                                rho,
-                               tr_radius, gmres_res, gmres_it)
+                               tr_radius, gmres_res/norm(b), gmres_it)
         end
 
         # tolerances reached
