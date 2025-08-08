@@ -112,7 +112,7 @@ function linesearch(G, S, z0::MVector{X, N}, δz::MVector{X, N}, opts::Options, 
             val_λ = e_norm_λ(G, S, z0, δz, λ, tmp)
         catch err
             # We might end up in a situation where the
-            # new time span has nehative length. In
+            # new time span has negative length. In
             # such a case, we might just continue
             if !isa(err, Flows.InvalidSpanError)
                 rethrow(err)
