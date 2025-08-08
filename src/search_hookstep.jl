@@ -1,7 +1,6 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-import Base.Threads: nthreads
 using Printf
 
 # trust region method implementation
@@ -10,9 +9,9 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
     opts.verbose && display_header_hks(opts.io, z)
 
     # allocate memory
-    b    = similar(z)                           # right hand side
-    dz   = similar(z)                           # temporary
-    tmps = ntuple(i->similar(z[1]), nthreads()) # one temporary for each thread
+    b    = similar(z)                             # right hand side
+    dz   = similar(z); dz .*= 0.0                 # temporary
+    tmps = ntuple(i->similar(z[1]), nsegments(z)) # one temporary for each segment
 
     # calculate initial error
     e_norm = e_norm_λ(Gs, S, z, z, 0.0, tmps)
@@ -39,13 +38,16 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
 
     # newton iterations loop
     for iter = 1:opts.maxiter
+        # callback
+        opts.callback(iter, z) && (status = :callback_satisfied; break)
+
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # UPDATE CACHE
-        update!(cache, dz, z, opts)
+        update!(cache, b, z, opts)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         # SOLVE TRUST REGION PROBLEM
-        hits_boundary, which, step, gmres_res, gmres_it = solve_tr_subproblem!(dz, z, cache, tr_radius, opts)
+        hits_boundary, which, step, gmres_res, gmres_it = solve_tr_subproblem!(opts.gmres_start(dz), b, z, cache, tr_radius, opts)
 
         # calc actual reductions
         e_norm_curr = e_norm_λ(Gs, S, z, dz, 0.0, tmps)
@@ -88,7 +90,7 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
                                dz_norm,
                                e_norm,
                                rho,
-                               tr_radius, gmres_res, gmres_it)
+                               tr_radius, gmres_res/norm(b), gmres_it)
         end
 
         # tolerances reached
@@ -111,24 +113,23 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
 end
 
 # Solve the Trust Region optimisation subproblem
-function solve_tr_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+function solve_tr_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
 
     if opts.method == :tr_direct
-        return solve_dogleg_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+        return solve_dogleg_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     end
 
     if opts.method == :tr_iterative
-        return solve_hookstep_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+        return solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     end
 
     # this should not happen as we restrict the method in the Options struct
     throw(ArgumentError("panic!"))
 end
 
-function solve_hookstep_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
-    
+function solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     # solve optimisation problem (this is always using GMRES)
-    dz, res_err_norm, n_iter = _solve(cache, dz, tr_radius, opts)
+    dz, res_err_norm, n_iter = _solve(dz, cache, b, tr_radius, opts)
 
     # we consider a newton step only if we are within the trust region
     # and we have managed to reduce the error at least as much as required
@@ -144,21 +145,20 @@ function solve_hookstep_subproblem!(dz::MVector, z::MVector, cache, tr_radius::R
     end
 end
 
-function solve_dogleg_subproblem!(dz::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
-    
+function solve_dogleg_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     # ~~~ GET NEWTON STEP ~~~
-    dz_N, res_err_norm = _solve(cache, copy(dz), opts)
+    dz, res_err_norm = _solve(dz, cache, b, opts)
 
     if norm(dz_N) < tr_radius
-        dz .= dz_N
         return false, :newton, 1.0, 0.0, 0
     end
+    dz_N = copy(dz)
 
     # ~~~ GET CAUCHY STEP ~~~
-    grad = cache.A'*tovector(dz)
+    grad = cache.A'*tovector(b)
     den  = cache.A*grad
 
-    dz_C = fromvector!(copy(dz), grad)
+    dz_C = fromvector!(copy(b), grad)
     dz_C .*= (norm(grad)/norm(den))^2
 
     if norm(dz_C) > tr_radius

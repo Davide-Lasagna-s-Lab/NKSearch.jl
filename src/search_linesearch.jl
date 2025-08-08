@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-import Base.Threads: threadid, @threads, nthreads, atomic_add!, Atomic
+import Base.Threads: @sync, @spawn, atomic_add!, Atomic
 import LinearAlgebra: norm
 import Flows
 
@@ -64,35 +64,33 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
     return nothing
 end
 
-function e_norm_λ(Gs::NTuple{NT},
-                   S,
-                  z0::MVector{X, N, NS},
-                  δz::MVector{X, N, NS},
-                   λ::Real,
-                tmps::NTuple{NT, X}) where {X, N, NS, NT}
-
-    # store reduction here
+function e_norm_λ(Gs::NTuple{N},
+                    S,
+                   z0::MVector{X, N, NS},
+                   δz::MVector{X, N, NS},
+                    λ::Real,
+                 tmps::NTuple{N, X}) where {X, N, NS}
+    # error output
     out = Atomic{Float64}(0.0)
 
-    # sum all error contributions
-    @threads for i = 1:N
-        # this thread id
-        id = threadid()
+    # loop over segments summing the error
+    @sync for i in 1:N
+        @spawn begin
+            # set initial condition
+            tmps[i] .= z0[i] .+ λ.*δz[i]
 
-        # set initial condition
-        tmps[id] .= z0[i] .+ λ.*δz[i]
+            # actual propagation
+            Gs[i](tmps[i], (0, (z0.d[1] + λ*δz.d[1])/N))
 
-        # actual propagation
-        Gs[id](tmps[id], (0, (z0.d[1] + λ*δz.d[1])/N))
+            # last segment is shifted (if we have a shift)
+            NS == 2 && i == N && S(tmps[i], z0.d[2] + λ*δz.d[2])
 
-        # last segment is shifted (if we have a shift)
-        NS == 2 && i == N && S(tmps[id], z0.d[2] + λ*δz.d[2])
+            # calc difference
+            tmps[i] .-= z0[i%N + 1] .+ λ.*δz[i%N + 1]
 
-        # calc difference
-        tmps[id] .-= z0[i%N+1] .+ λ.*δz[i%N+1]
-
-        # atomic add to error
-        atomic_add!(out, norm(tmps[id])^2)
+            # add to error
+            atomic_add!(out, norm(tmps[i])^2)
+        end
     end
 
     return out[]

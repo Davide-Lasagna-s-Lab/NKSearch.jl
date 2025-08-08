@@ -5,6 +5,11 @@ import Base.Threads: nthreads
 
 export search!
 
+# NOTE: multithreading only works reliably (no race conditions) if the number of threads
+# NOTE: equals the number of segments used for the multiple-shooting.
+# NOTE: See https://julialang.org/blog/2023/07/PSA-dont-use-threadid/ for details
+# NOTE: on the faulty pattern that is being used that causes the problems encountered.
+
 # Arguments
 # ---------
 # G    : nonlinear propagator  - obeys `G(x, (0, T))` where `x` is modified in place
@@ -19,13 +24,13 @@ export search!
 # opts : search options (see src/options.jl)
 
 search!(G, L, S, F, dS, z0::MVector{X, N, 2}, opts::Options=Options()) where {X, N} =
-    _search!(ntuple(i->deepcopy(G), nthreads()), 
-             ntuple(i->deepcopy(L), nthreads()), S, (F, dS), z0, opts)
+    _search!(ntuple(i->deepcopy(G), nsegments(z0)), 
+             ntuple(i->deepcopy(L), nsegments(z0)), S, (F, dS), z0, opts)
 
 # when we do not have shifts
 search!(G, L, F, z0::MVector{X, N, 1}, opts::Options=Options()) where {X, N} =
-    _search!(ntuple(i->deepcopy(G), nthreads()), 
-             ntuple(i->deepcopy(L), nthreads()), nothing, (F, ), z0, opts)
+    _search!(ntuple(i->deepcopy(G), nsegments(z0)), 
+             ntuple(i->deepcopy(L), nsegments(z0)), nothing, (F, ), z0, opts)
 
 # dispatch to correct method
 function _search!(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
@@ -38,5 +43,4 @@ function _search!(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
             : opts.method == :tr_iterative
             ? _search_hookstep!(Gs, Ls, S, D, z0, IterSolCache(Gs, Ls, S, D, z0, opts), opts)
             : throw(ArgumentError("panic!")))
-
 end

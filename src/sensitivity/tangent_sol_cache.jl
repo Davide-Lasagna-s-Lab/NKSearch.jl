@@ -6,6 +6,8 @@ import LinearAlgebra: dot
 import GMRES: gmres!
 import Flows
 
+# TODO: move sensitivity analysis to a different package
+
 # ~~~ Matrix Type ~~~
 struct TangentProblemLHS{X, N, NS, LST, ST, DT, CT}
        Ls::LST               # linearised flow operator(s)
@@ -35,17 +37,21 @@ function make_tangent_problem(z::MVector{X, N, NS},
     tmp = similar(z[1])
 
     # period and shift
-    T, s = z.d
+    if NS == 2
+        T, s = z.d
+    else
+        T,   = z.d
+    end
 
     # get last point on the orbit and obtain its time derivative 
      x0   =   store(similar(z[1]), 0, Val(0))
-     xT   = S(store(similar(z[1]), T, Val(0)), s)
-    dxTdT = S(store(similar(z[1]), T, Val(1)), s)
+     xT   = NS == 2 ? S(store(similar(z[1]), T, Val(0)), s) : store(similar(z[1]), T, Val(0))
+    dxTdT = NS == 2 ? S(store(similar(z[1]), T, Val(1)), s) : store(similar(z[1]), T, Val(1))
 
     # right hand side
     rhs = similar(z)
 
-    @threads for i = 1:N
+    @threads :static for i = 1:N
         # note that store must be thread safe
         id = threadid()
 
@@ -63,35 +69,47 @@ function make_tangent_problem(z::MVector{X, N, NS},
     end
 
     # we need to "back-shift" the last state it if we have a symmetry
-    S(rhs[N], s)
+    NS == 2 && S(rhs[N], s)
 
     rhs.d = tuple(zeros(NS)...)
 
     return TangentProblemLHS(Ls, S, D, x0, xT, dxTdT, tmp, z, store), rhs
 end
 
+# outer constructor without shift
+make_tangent_problem(z::MVector{X, N, 1},
+                     store,
+                     L,
+                     J,
+                     D) where {X, N} = make_tangent_problem(z,
+                                                            store,
+                                                            L,
+                                                            J,
+                                                            nothing,
+                                                            D)
+
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(mm::TangentProblemLHS{X}, w::MVector{X}) where {X} = mul!(similar(w), mm, w)
 
 # Compute mat-vec product
-function mul!(out::MVector{X, N, 2},
-               mm::TangentProblemLHS{X, N, 2},
-                w::MVector{X, N, 2}) where {X, N}
-
+function mul!(out::MVector{X, N, NS},
+              mm::TangentProblemLHS{X, N, NS},
+              w::MVector{X, N, NS}) where {X, N, NS}
     # aliases
-    store  = mm.store
-    x0     = mm.x0
-    xT     = mm.xT
-    dxTdT  = mm.dxTdT
-    Ls     = mm.Ls
-    D      = mm.D
-    S      = mm.S
-    z      = mm.z
-    tmp    = mm.tmp
-    T, s   = mm.z.d
+    store = mm.store
+    x0    = mm.x0
+    xT    = mm.xT
+    dxTdT = mm.dxTdT
+    Ls    = mm.Ls
+    D     = mm.D
+    S     = mm.S
+    z     = mm.z
+    tmp   = mm.tmp
+    T     = mm.z.d[1]
+    s     = NS == 2 ? mm.z.d[2] : 0.0
 
     # compute L{x0[i]}⋅w[i] - w[i+1]
-    @threads for i = 1:N
+    @threads :static for i = 1:N
         # this thread id
         id = threadid()
 
@@ -105,7 +123,7 @@ function mul!(out::MVector{X, N, 2},
         Ls[id](out[i], store, span)
 
         # apply shift on last segment
-        i == N && S(out[i], s)
+        NS == 2 && i == N && S(out[i], s)
 
         # this is the identity operators on the upper diagonal
         out[i] .-= w[i%N + 1]
@@ -114,10 +132,11 @@ function mul!(out::MVector{X, N, 2},
     # Add time and space derivative of state at end point. Note that
     # if we have a spatial continuous symmetry (NS = 2), these two 
     # derivatives will have been "back-shifted"
-    out[N] .+= dxTdT.*w.d[1] .+ D[2](tmp, xT).*w.d[2]
+    out[N] .+= dxTdT.*w.d[1]
+    NS == 2 && (out[N] .+= D[2](tmp, xT).*w.d[2])
 
     # Compute phase locking constraints
-    out.d = ntuple(j->dot(w[1], D[j](tmp, x0)), 2)
+    out.d = ntuple(j->dot(w[1], D[j](tmp, x0)), length(D))
 
     return out
 end

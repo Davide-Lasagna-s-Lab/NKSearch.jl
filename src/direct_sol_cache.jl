@@ -1,18 +1,19 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-import Base.Threads: threadid, @threads, nthreads
+import Base.Threads: @sync, @spawn
 import SparseArrays: spzeros, SparseMatrixCSC, diagind
 import LinearAlgebra: lu, ldiv!
 import Flows: couple
 
 
 # Apply operator op{u}*v to every column v of the identity matrix
+# ! this function doesn't work if a complex valued array type is passed
 function op_apply_eye!(out::Matrix{T},
                        op,
                        u::X,
                        span::Tuple{Real, Real},
-                       _u::X, _v::X) where {T, X<:AbstractVector{T}}
+                       _u::X, _v::X) where {T, X}
     n = length(u)
     @inbounds for i = 1:n
         _u    .= u
@@ -35,16 +36,18 @@ struct DirectSolCache{GST, LST, ST, DT, YST, TMPST, MONST}
 end
 
 function DirectSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
+    nthreads() > 1 && printstyled("DirectSolCache is not properly implemented with multithreading!", color=:red)
     n = length(z0[1])
-    m = N *n + NS
+    m = N*n + NS
+    mon_type = opts.fd_order == 1 ? Flows.StoreNFromLast{0} : Flows.StoreNFromLast{2}
     DirectSolCache(Gs,
                    Ls,
                    S,
                    D,
                    spzeros(m, m),
-                   ntuple(i->zeros(n, n), nthreads()),
-                   ntuple(i->similar(z0[1]), 3*nthreads()), 
-                   ntuple(i->Flows.StoreOneButLast(z0[1]), nthreads()))
+                   ntuple(i->zeros(n, n), nsegments(z0)),
+                   ntuple(i->similar(z0[1]), 3*nsegments(z0)),
+                   ntuple(i->mon_type(z0[1]), nsegments(z0)))
 end
 
 Base.:*(dsm::DirectSolCache, dz::MVector) = fromvector!(similar(dz), dsm.A*tovector(dz))
@@ -69,25 +72,24 @@ function update!(dsm::DirectSolCache,
        s = NS == 2 ? z0.d[2] : 0.0
 
     # linear operators on the diagonal
-    op1(id) = (x, y, span)->(Ls[id](couple(x, y), span); y)
-    op2(id) = (x, y, span)->(Ls[id](couple(x, y), span); S(y, s); y)
+    op1(i) = (x, y, span)->(Ls[i](couple(x, y), span); y)
+    op2(i) = (x, y, span)->(Ls[i](couple(x, y), span); S(y, s); y)
 
     # fill main block
-    # @threads 
-    for i = 1:N
-        # this thread id
-        id = 1#threadid()
-        
-        # global indices where we will write
-        rng = _blockrng(i, n)
+    @sync for i = 1:N
+        @spawn begin
+            # global indices where we will write
+            rng = _blockrng(i, n)
 
-        # write i-th block on diagonal
-        if NS == 2 && i == N
-            op_apply_eye!(Ys[id], op2(id), z0[i], (0, T/N), tmps[3*id], tmps[3*id-1])
-        else
-            op_apply_eye!(Ys[id], op1(id), z0[i], (0, T/N), tmps[3*id], tmps[3*id-1])
+            # write i-th block on diagonal
+            if NS == 2 && i == N
+                op_apply_eye!(Ys[i], op2(i), z0[i], (0, T/N), tmps[3*i], tmps[3*i-1])
+            else
+                # ! this passes FTField objects when it needs to be passing vectors
+                op_apply_eye!(Ys[i], op1(i), z0[i], (0, T/N), tmps[3*i], tmps[3*i-1])
+            end
+            A[rng, rng] .= Ys[i]
         end
-        A[rng, rng] .= Ys[id]
     end
 
     # add identities on diagonals
@@ -109,42 +111,44 @@ function update!(dsm::DirectSolCache,
     end
 
     # right borders and right hand side
-    # @threads 
-    for i = 1:N
-        # id of current thread
-        id = 1#threadid()
+    @sync for i = 1:N
+        @spawn begin
+            # aliases
+            _u1 = tmps[3*i]
+            _u2 = tmps[3*i-1]
+            _u3 = tmps[3*i-2]
 
-        # aliases
-        _u1 = tmps[3*id]
-        _u2 = tmps[3*id-1]
-        _u3 = tmps[3*id-2]
+            # obtain final state
+            _u3 .= z0[i]
+            Gs[i](_u3, (0, T/N), mons[i])
 
-        # obtain final state
-        _u3 .= z0[i]
-        Gs[id](_u3, (0, T/N), mons[id])
+            # calc derivative of flow operator
+            _u1 .= mons[i].x
+            opts.fd_order == 2 && _u2 .= mons[i].x;
+            Gs[i](_u1, (mons[i].t, T/N + opts.ϵ))
+            opts.fd_order == 2 && Gs[i](_u2, (mons[i].t, T/N - opts.ϵ))
+            if opts.fd_order == 2
+                _u2 .= 0.5.*(_u1 .- _u2)./opts.ϵ
+            else
+                _u2 .= (_u1 .- mons[i].x)./opts.ϵ
+            end
 
-        # calc derivative of flow operator
-        _u1 .= mons[id].x
-        _u2 .= mons[id].x;
-        Gs[id](_u1, (mons[id].t, T/N + opts.ϵ))
-        Gs[id](_u2, (mons[id].t, T/N - opts.ϵ))
-        _u2 .= 0.5.*(_u1 .- _u2)./opts.ϵ
+            #apply shift if needed
+            NS == 2 && i == N && S(_u2, s)
 
-        #apply shift if needed
-        NS == 2 && i == N && S(_u2, s)
+            # write along column
+            A[_blockrng(i, n), end - NS + 1] .= _u2./N
 
-        # write along column
-        A[_blockrng(i, n), end - NS + 1] .= _u2./N
+            # write column for the shift
+            if NS == 2 && i == N
+                S(_u3, s)
+                D[2](_u2, _u3)
+                A[_blockrng(i, n), end] .= _u2
+            end
 
-        # write column for the shift
-        if NS == 2 && i == N
-            S(_u3, s)
-            D[2](_u2, _u3)
-            A[_blockrng(i, n), end] .= _u2
+            # rhs
+            b[i] .= z0[i % N + 1] .- _u3
         end
-
-        # rhs
-        b[i] .= z0[i % N + 1] .- _u3
     end
 
     # reset shifts
@@ -155,5 +159,5 @@ end
 
 
 # solution for direct method
-_solve(dsm::DirectSolCache, b::MVector, opts::Options) =
-    (fromvector!(b, ldiv!(lu(dsm.A), tovector(b))), 0.0)
+_solve(dz::MVector, dsm::DirectSolCache, b::MVector, opts::Options) =
+    (fromvector!(dz, ldiv!(lu(dsm.A), tovector(b))), 0.0)

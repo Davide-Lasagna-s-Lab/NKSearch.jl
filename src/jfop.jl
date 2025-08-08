@@ -27,7 +27,6 @@ function has_seen(op::JFOp, span, x)
 end
 
 function (op::JFOp)(xy::Flows.Coupled{2}, span::NTuple{2, Real})
-    
     # unpack
     x, y = xy[1], xy[2]
 
