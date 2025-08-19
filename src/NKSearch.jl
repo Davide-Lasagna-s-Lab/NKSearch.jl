@@ -20,9 +20,6 @@ include("search_linesearch.jl")
 include("search_trustregion.jl")
 include("search_hookstep.jl")
 
-# continuation
-include("continuation/derivative.jl")
-
 # sensitivity stuff
 include("sensitivity/adjoint_sol_cache.jl")
 include("sensitivity/tangent_sol_cache.jl")
