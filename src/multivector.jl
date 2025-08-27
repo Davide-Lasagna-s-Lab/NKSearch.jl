@@ -18,6 +18,7 @@ export MVector,
 # 1) dot(::X, ::X)
 # 2) similar(::X)
 # 3) full broadcast functionality, with variables of type `X` and scalars
+# 4) zero(::X)
 
 # ~~~ Vector Type ~~~
 mutable struct MVector{X, N, NS} <: AbstractVector{Float64}
@@ -38,6 +39,7 @@ nsegments(::MVector{X, N}) where {X, N} = N
 # interface for GMRES solver
 Base.similar(z::MVector) = MVector(similar.(z.x), z.d...)
 Base.copy(z::MVector) = MVector(copy.(z.x), z.d...)
+Base.zero(z::MVector) = MVector(zero.(z.x), (zero(d) for d in z.d)...)
 LinearAlgebra.norm(z::MVector) = sqrt(LinearAlgebra.dot(z, z))
 LinearAlgebra.dot(a::MVector{X, N}, b::MVector{X, N}) where {X, N} =
     sum(a.d.*b.d) + sum(LinearAlgebra.dot.(a.x, b.x))
