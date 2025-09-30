@@ -140,7 +140,7 @@ function solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, 
     # use this info to decide whether we want to increase or decrease it.
     if norm(dz) < tr_radius * (1 + 1e-6) && res_err_norm <= opts.gmres_rtol
         return false, :newton, norm(dz), res_err_norm, n_iter
-    else 
+    else
         return true,  :hkstep, tr_radius, res_err_norm, n_iter
     end
 end
@@ -149,6 +149,7 @@ function solve_dogleg_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr
     # ~~~ GET NEWTON STEP ~~~
     dz, res_err_norm = _solve(dz, cache, b, opts)
 
+    # FIXME: this would throw an error, right?
     if norm(dz_N) < tr_radius
         return false, :newton, 1.0, 0.0, 0
     end

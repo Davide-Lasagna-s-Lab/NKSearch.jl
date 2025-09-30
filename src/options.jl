@@ -4,12 +4,10 @@
 
 using Parameters
 
-import GMRES: GMRESTrace
-
-export Options, GMRESTrace
+export Options
 
 # ~~~ SEARCH OPTIONS FOR NEWTON ITERATIONS ~~~
-@with_kw struct Options{GT<:Union{Nothing, GMRESTrace}, W, CB}
+@with_kw struct Options{GT, W, CB}
     # generic parameters
     method::Symbol          = :ls_direct           # search method
     maxiter::Int            = 10                   # maximum newton iteration number
@@ -35,13 +33,13 @@ export Options, GMRESTrace
     gmres_maxiter::Int      = 10                   # maximum number of GMRES iterations
     gmres_verbose::Bool     = true                 # print GMRES iteration status
     gmres_rtol::Float64     = 1e-3                 # GMRES relative stopping tolerance
-    gmres_trace::GT         = nothing              # keep track of GMRES state between newton iterations
+    gmres_callback::GT      = nothing              # GMRES callback function
     gmres_start::W          = dz->(dz .*= 0.0; dz) # GMRES warm start based on previous Newton step
 
     # trust_region algorithm parameters
-    min_step::Float64       = 1e-4
-    α::Float64              = 1
-    NR_lim::Float64         = 1e-8
+    min_step::Float64       = 1e-4                 # minimum step tolerance
+    α::Float64              = 1                    # over-relaxation factor for trust region update
+    NR_lim::Float64         = 1e-8                 # maximum limit for newton region update
     tr_radius_init::Float64 = 1                    # initial trust region radius
     tr_radius_max::Float64  = 10^8                 # maximum trust region radius
     eta::Float64            = 0.00                 # maximum trust region radius
