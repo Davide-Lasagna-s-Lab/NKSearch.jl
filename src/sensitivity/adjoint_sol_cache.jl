@@ -138,9 +138,7 @@ function mul!(out::MVector{X, N, NS}, mm::AdjointProblemLHS{X, N, NS}, w::MVecto
     NS == 2 && (out[N] .-= S(D[2](tmp, x0), -s).*w.d[2])
 
     # bottom rows
-    # out.d[1] = dot(w[1], dxTdT)
-    # NS == 2 && (out.d[2] = dot(w[1], D[2](tmp, xT)))
-    out.d = ntuple(j->dot(w[1], (dxTdT, D[j](tmp, xT))[j]), length(D))
+    out.d = ntuple(j-> j == 1 ? dot(w[1], dxTdT) : dot(w[1], D[j](tmp, xT)), length(D))
 
     return out
 end
