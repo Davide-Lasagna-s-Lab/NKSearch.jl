@@ -11,11 +11,12 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
     opts.verbose && display_header_ls(opts.io, z0)
 
     # allocate memory
-    b   = similar(z0)                   # right hand side
-    tmp = similar(z0[1])                # temporary
+    b    = similar(z0)                                # right hand side
+    dz   = similar(z0)                                # newton step
+    tmps = ntuple(i->similar(z0[1]), nsegments(z0))   # one temporary per segment
 
     # calculate initial error
-    e_norm = e_norm_λ(G, S, z0, z0, 0.0, tmp)
+    e_norm = e_norm_λ(G, S, z0, z0, 0.0, tmps)
 
     # display status if verbose
     opts.verbose && display_status_ls(opts.io,
@@ -32,17 +33,17 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
         # update Newton update matrix operator and right hand side
         update!(A, b, z0, opts)
 
-        # solve system by overwriting b in place
-        b, res_err_norm = _solve(A, b, opts)
+        # solve system, writing the Newton step into dz
+        dz, res_err_norm = _solve(dz, A, b, opts)
 
         # perform line search
-        λ, e_norm = linesearch(G, S, z0, b, opts, tmp)
+        λ, e_norm = linesearch(G, S, z0, dz, opts, tmps)
 
         # actually apply correction
-        z0 .+= λ.*b
+        z0 .+= λ.*dz
 
         # correction norm
-        dz_norm = norm(b)
+        dz_norm = norm(dz)
 
         # display status if verbose
         if opts.verbose && iter % opts.skipiter == 0
@@ -96,31 +97,23 @@ function e_norm_λ(Gs::NTuple{N},
     return out[]
 end
 
-function linesearch(G, S, z0::MVector{X, N}, δz::MVector{X, N}, opts::Options, tmp::X) where {X, N}
+function linesearch(G, S, z0::MVector{X, N}, δz::MVector{X, N}, opts::Options, tmps::NTuple{N, X}) where {X, N}
     # current error
-    val_0 = e_norm_λ(G, S, z0, δz, 0.0, tmp)
+    val_0 = e_norm_λ(G, S, z0, δz, 0.0, tmps)
 
     # start with full Newton step
     λ = 1.0
 
-    # initialize this variable
-    val_λ = λ*val_0
-
     for iter = 1:opts.ls_maxiter
-        # calculate error
+        # calculate error and accept any reduction of error
         try
-            val_λ = e_norm_λ(G, S, z0, δz, λ, tmp)
+            val_λ = e_norm_λ(G, S, z0, δz, λ, tmps)
+            val_λ < val_0 && return λ, val_λ
         catch err
-            # We might end up in a situation where the
-            # new time span has negative length. In
-            # such a case, we might just continue
-            if !isa(err, Flows.InvalidSpanError)
-                rethrow(err)
-            end
+            # We might end up in a situation where the new time span has
+            # negative length. In such a case just try a shorter step.
+            isa(err, Flows.InvalidSpanError) || rethrow(err)
         end
-
-        # accept any reduction of error
-        val_λ < val_0 && return λ, val_λ
 
         # ~ otherwise attempt with shorter step ~
         λ *= opts.ls_rho

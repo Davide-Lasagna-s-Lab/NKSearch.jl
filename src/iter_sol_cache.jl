@@ -139,12 +139,15 @@ function update!(mm::IterSolCache{X, N, NS},
     return nothing
 end
 
-# solution for iterative method
-_solve(x::MV, A::IterSolCache, b::MV, opts::Options) where {MV<:MVector} =
-    gmres!(x, A, b; rel_rtol=opts.gmres_rtol,
-                     maxiter=opts.gmres_maxiter,
-                     verbose=opts.gmres_verbose,
-                    callback=opts.gmres_callback)
+# solution for iterative method. Return only (solution, residual norm) so the
+# contract matches the direct solver used by the line-search driver.
+function _solve(x::MV, A::IterSolCache, b::MV, opts::Options) where {MV<:MVector}
+    x, res_err_norm, _ = gmres!(x, A, b; rel_rtol=opts.gmres_rtol,
+                                          maxiter=opts.gmres_maxiter,
+                                          verbose=opts.gmres_verbose,
+                                         callback=opts.gmres_callback)
+    return x, res_err_norm
+end
 
 _solve(x::MV, A::IterSolCache, b::MVector, tr_radius::Real, opts::Options) where {MV<:MVector} =
     gmres!(x, A, b, tr_radius; rel_rtol=opts.gmres_rtol,
