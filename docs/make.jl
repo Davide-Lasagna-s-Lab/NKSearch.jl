@@ -1,15 +1,17 @@
 # Build the NKSearch documentation.
 #
 # NKSearch and its solver dependencies (Flows, GMRES) are not registered, so we
-# bootstrap the docs environment here: if sibling clones live next to this
-# repository (the usual development layout), `dev` them, then instantiate. This
-# makes a single `julia --project=docs docs/make.jl` build from a clean checkout.
+# bootstrap the docs environment here. Each dependency is taken from a local
+# sibling clone when one exists (the usual development layout), otherwise it is
+# fetched from its repository — so the same `julia --project=docs docs/make.jl`
+# builds both locally and on CI.
 import Pkg
 let pkgroot = dirname(@__DIR__), parent = dirname(dirname(@__DIR__))
     specs = [Pkg.PackageSpec(path=pkgroot)]                       # NKSearch itself
-    for pkg in ("Flows.jl", "GMRES.jl")                           # unregistered deps
+    for (pkg, url) in (("Flows.jl", "https://github.com/Davide-Lasagna-s-Lab/Flows.jl"),
+                       ("GMRES.jl", "https://github.com/Davide-Lasagna-s-Lab/GMRES.jl"))
         p = joinpath(parent, pkg)
-        isdir(p) && push!(specs, Pkg.PackageSpec(path=p))
+        push!(specs, isdir(p) ? Pkg.PackageSpec(path=p) : Pkg.PackageSpec(url=url))
     end
     Pkg.develop(specs)                                            # add them together
     Pkg.instantiate()
@@ -26,6 +28,11 @@ makedocs(;
     authors  = "Davide Lasagna",
     checkdocs = :exports,
     doctest   = true,
+    format = Documenter.HTML(;
+        canonical = "https://Davide-Lasagna-s-Lab.github.io/NKSearch.jl",
+        # docs/src/assets/logo.svg is picked up automatically
+        assets = String[],
+    ),
     pages = [
         "Home"           => "index.md",
         "Concepts"       => "concepts.md",
@@ -35,5 +42,10 @@ makedocs(;
     ],
 )
 
-# Uncomment and configure once a deployment target is set up.
-# deploydocs(; repo = "github.com/Davide-Lasagna-s-Lab/NKSearch.jl")
+# Deploy to GitHub Pages (the gh-pages branch). Runs only in the CI job, where
+# GITHUB_TOKEN / DOCUMENTER_KEY is available; a no-op on local builds.
+deploydocs(;
+    repo      = "github.com/Davide-Lasagna-s-Lab/NKSearch.jl",
+    devbranch = "master",
+    push_preview = true,
+)

@@ -1,0 +1,39 @@
+name: Documentation
+
+on:
+  push:
+    branches:
+      - master
+    tags: ['*']
+  pull_request:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # deploydocs pushes the built site to gh-pages
+      pull-requests: read     # allows PR previews
+      statuses: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'        # latest stable Julia (>= 1.11, required by Flows)
+
+      - uses: julia-actions/cache@v2
+
+      - name: Build and deploy the documentation
+        # docs/make.jl bootstraps the unregistered deps (Flows, GMRES, NKSearch)
+        # from their repositories, builds the site, runs doctests, and deploys.
+        run: julia --project=docs --color=yes docs/make.jl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}
+          JULIA_NUM_THREADS: '1'
