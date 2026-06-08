@@ -148,12 +148,12 @@ end
 function solve_dogleg_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
     # ~~~ GET NEWTON STEP ~~~
     dz, res_err_norm = _solve(dz, cache, b, opts)
+    dz_N = copy(dz)
 
-    # FIXME: this would throw an error, right?
+    # if the full Newton step is inside the trust region, take it
     if norm(dz_N) < tr_radius
         return false, :newton, 1.0, 0.0, 0
     end
-    dz_N = copy(dz)
 
     # ~~~ GET CAUCHY STEP ~~~
     grad = cache.A'*tovector(b)
