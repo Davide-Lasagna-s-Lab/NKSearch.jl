@@ -7,6 +7,55 @@ using Parameters
 export Options
 
 # ~~~ SEARCH OPTIONS FOR NEWTON ITERATIONS ~~~
+"""
+    Options(; kwargs...)
+
+Configuration for [`search!`](@ref). All fields are keyword arguments with
+defaults; only override what you need.
+
+# Key options
+- `method::Symbol = :ls_direct`: globalization + linear-solve strategy, one
+  of `:ls_direct`, `:ls_iterative`, `:tr_direct`, `:tr_iterative`. The
+  `ls_` variants use a line search, the `tr_` variants a trust region
+  (dogleg for `:tr_direct`, hookstep for `:tr_iterative`). The `_direct`
+  variants assemble and LU-factorise the Jacobian; the `_iterative`
+  variants solve it matrix-free with GMRES. See the manual for guidance.
+- `maxiter::Int = 10`: maximum number of Newton iterations.
+- `e_norm_tol::Float64 = 1e-10`: convergence tolerance on the residual norm.
+- `dz_norm_tol::Float64 = 1e-10`: convergence tolerance on the Newton step norm.
+- `ϵ::Float64 = 1e-6`: step used for the finite-difference approximation of
+  the time derivative of the flow operator.
+- `fd_order::Int = 2`: order (1 or 2) of that finite-difference scheme.
+- `verbose::Bool = true`, `io = stdout`, `skipiter::Int = 1`: control status
+  printing (`io` receives a table, every `skipiter` iterations).
+- `callback = (iter, z) -> false`: called after each iteration; returning
+  `true` terminates the search.
+
+# Line-search options
+- `ls_maxiter::Int = 10`, `ls_rho::Float64 = 0.5`: maximum backtracking
+  iterations and step-reduction factor.
+
+# GMRES options (iterative methods)
+- `gmres_maxiter::Int = 10`, `gmres_rtol::Float64 = 1e-3`,
+  `gmres_verbose::Bool = true`, `gmres_callback = nothing`,
+  `gmres_start = dz -> (dz .*= 0; dz)`: GMRES iteration count, relative
+  tolerance, verbosity, callback, and warm-start initialiser.
+
+# Trust-region options (`tr_` methods)
+- `tr_radius_init::Float64 = 1`, `tr_radius_max::Float64 = 1e8`: initial and
+  maximum trust-region radius.
+- `min_step::Float64 = 1e-4`: minimum accepted step before stopping.
+- `NR_lim::Float64 = 1e-8`: residual level below which a full Newton step is
+  taken regardless of the trust-region test.
+- `α::Float64 = 1`, `eta::Float64 = 0.0`: over-relaxation factor and the
+  minimum reduction ratio for accepting a step.
+
+# Example
+```julia
+opts = Options(method=:tr_iterative, maxiter=25,
+               e_norm_tol=1e-12, gmres_maxiter=5, verbose=false)
+```
+"""
 @with_kw struct Options{GT, W, CB}
     # generic parameters
     method::Symbol          = :ls_direct           # search method
