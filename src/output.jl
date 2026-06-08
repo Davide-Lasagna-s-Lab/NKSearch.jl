@@ -29,7 +29,7 @@ display_header_tr(io::IO, ::MVector{X, N, NS}) where {X, N, NS} =
 
 # hookstep
 const _header_hks = "+------+--------+-----------+-------------+------------+-----------+-----------+----------+\n"*
-                    "| iter | which  |  ||dz||   |   ||e||^2   |    rho     | tr_radius | GMRES res | GMRES it |\n"*
+                    "| iter | which  |  ||dz||   |    ||e||    |    rho     | tr_radius | GMRES res | GMRES it |\n"*
                     "+------+--------+-----------+-------------+------------+-----------+-----------+----------+\n"
 
 display_header_hks(io::IO, ::MVector{X, N, NS}) where {X, N, NS} = 
@@ -39,9 +39,10 @@ display_header_hks(io::IO, ::MVector{X, N, NS}) where {X, N, NS} =
 
 # line search
 
-# print output when we have a shift
+# print output when we have a shift. Note `e_norm` is the squared error
+# norm; we display its square root, the actual norm ||e||.
 function display_status_ls(io::IO, iter, dz_norm, d::TUP2, e_norm, λ, res_err_norm) where {TUP2<:Tuple{Any, Any}}
-    str = @sprintf "|%4d  | %5.2e | %+5.2e | %+5.2e | %5.2e | %+5.2e | %5.2e |" iter dz_norm d[1] d[2] e_norm λ res_err_norm
+    str = @sprintf "|%4d  | %5.2e | %+5.2e | %+5.2e | %5.2e | %+5.2e | %5.2e |" iter dz_norm d[1] d[2] sqrt(e_norm) λ res_err_norm
     println(io, str)
     flush(io)
     return nothing
@@ -49,7 +50,7 @@ end
 
 # print output when we don't
 function display_status_ls(io::IO, iter, dz_norm, d::Tuple{Any}, e_norm, λ, res_err_norm)
-    str = @sprintf "|%4d  | %5.2e | %+5.2e | %5.2e | %5.2e | %5.2e |" iter dz_norm d[1] e_norm λ res_err_norm
+    str = @sprintf "|%4d  | %5.2e | %+5.2e | %5.2e | %5.2e | %5.2e |" iter dz_norm d[1] sqrt(e_norm) λ res_err_norm
     println(io, str)
     flush(io)
     return nothing
@@ -57,14 +58,14 @@ end
 
 # trust region
 function display_status_tr(io::IO, iter, which, dz_norm, e_norm, rho, tr_radius)
-    str = @sprintf "|%4d  | %s | %5.3e | %5.3e | %+5.3e | %5.3e |" iter lpad(which, 6) dz_norm e_norm rho tr_radius
+    str = @sprintf "|%4d  | %s | %5.3e | %5.3e | %+5.3e | %5.3e |" iter lpad(which, 6) dz_norm sqrt(e_norm) rho tr_radius
     println(io, str)
     flush(io)
 end
 
 # trust region
 function display_status_hks(io::IO, iter, which, dz_norm, e_norm, rho, tr_radius, GMRES_res, GMRES_it)
-    str = @sprintf "|%4d  | %s | %5.3e | %7.5e | %+5.3e | %5.3e | %5.3e | %8d |" iter lpad(which, 6) dz_norm e_norm rho tr_radius GMRES_res GMRES_it
+    str = @sprintf "|%4d  | %s | %5.3e | %7.5e | %+5.3e | %5.3e | %5.3e | %8d |" iter lpad(which, 6) dz_norm sqrt(e_norm) rho tr_radius GMRES_res GMRES_it
     println(io, str)
     flush(io)
 end
