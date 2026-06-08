@@ -112,11 +112,11 @@ function update!(mm::IterSolCache{X, N, NS},
             # finite difference derivative of flow operator
             # see https://epubs.siam.org/doi/10.1137/070705623 page 27
             tmp[i] .= mons[i].x;
-            opts.fd_order == 2 && tmp[2*i] .= mons[i].x
+            opts.fd_order == 2 && (tmp[N+i] .= mons[i].x)
             Gs[i](tmp[i], (mons[i].t, T/N + ϵ))
-            opts.fd_order == 2 && Gs[i](tmp[2*i], (mons[i].t, T/N - ϵ))
+            opts.fd_order == 2 && Gs[i](tmp[N+i], (mons[i].t, T/N - ϵ))
             if opts.fd_order == 2
-                dxTdT[i] .= (tmp[i] .- tmp[2*i])./(2*ϵ)
+                dxTdT[i] .= (tmp[i] .- tmp[N+i])./(2*ϵ)
             else
                 dxTdT[i] .= (tmp[i] .- mons[i].x)./ϵ
             end
