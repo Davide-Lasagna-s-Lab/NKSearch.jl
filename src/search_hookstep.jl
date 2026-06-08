@@ -60,7 +60,7 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
         # calc ratio
         rho = actual/predicted
 
-        if e_norm_curr > 1e-7
+        if e_norm_curr > opts.NR_lim
             # trust region update
             if rho < 1/4
                 tr_radius *= 1/4
