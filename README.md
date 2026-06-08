@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="docs/src/assets/logo.svg" alt="NKSearch.jl logo" width="640">
+</p>
+
+[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://Davide-Lasagna-s-Lab.github.io/NKSearch.jl/dev/)
+
 # NKSearch.jl
 
 A Newton–Krylov solver for finding **periodic orbits** and **relative periodic
@@ -156,12 +162,13 @@ search!(G, L, (dudt, u) -> F(0, u, dudt), z,
 
 ## Documentation
 
-Full documentation (concepts, tutorial, API reference) is built with
-[Documenter.jl](https://documenter.juliadocs.org/) from the [`docs/`](docs/)
-folder:
+The full documentation (concepts, tutorial, API reference) is hosted at
+**<https://Davide-Lasagna-s-Lab.github.io/NKSearch.jl/dev/>**.
+
+It is built with [Documenter.jl](https://documenter.juliadocs.org/) from the
+[`docs/`](docs/) folder; to build it locally:
 
 ```bash
-julia --project=docs -e 'using Pkg; Pkg.instantiate()'
 julia --project=docs docs/make.jl
 ```
 
