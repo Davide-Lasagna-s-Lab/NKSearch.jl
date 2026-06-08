@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-import Base.Threads: threadid, @threads, nthreads
+import Base.Threads: @sync, @spawn
 import LinearAlgebra: dot
 import Flows
 
@@ -30,9 +30,10 @@ function make_adjoint_problem(z::MVector{X, N, NS},
                               D,
                             jTJ::Real) where {X, N, NS}
 
-    # make copies of the propagators
-    Js = ntuple(i->deepcopy(J), nthreads())
-    Ls = ntuple(i->deepcopy(L), nthreads())
+    # make copies of the propagators, one per segment (see the threading
+    # note in newton.jl on why we avoid threadid()-indexed buffers)
+    Js = ntuple(i->deepcopy(J), N)
+    Ls = ntuple(i->deepcopy(L), N)
 
     # temporaries
     tmp = similar(z[1])
@@ -52,21 +53,21 @@ function make_adjoint_problem(z::MVector{X, N, NS},
     # right hand side
     rhs = similar(z)
 
-    @threads :static for i = 1:N
-        # note that store must be thread safe
-        id = threadid()
+    @sync for i = 1:N
+        @spawn begin
+            # note that store must be thread safe
+            # integration span
+            span = (T - (i-1)*T/N, T - i*T/N)
 
-        # integration span
-        span = (T - (i-1)*T/N, T - i*T/N)
+            # set homogeneus initial condition
+            rhs[i] .= 0
 
-        # set homogeneus initial condition
-        rhs[i] .= 0
+            # propagate
+            Js[i](rhs[i], store, span)
 
-        # propagate
-        Js[id](rhs[i], store, span)
-
-        # flip sign
-        rhs[i] .*= -1.0
+            # flip sign
+            rhs[i] .*= -1.0
+        end
     end
 
     # shift the last state
@@ -113,23 +114,23 @@ function mul!(out::MVector{X, N, NS}, mm::AdjointProblemLHS{X, N, NS}, w::MVecto
     s     = NS == 2 ? mm.z.d[2] : 0.0
 
     # main block
-    @threads :static for i = 1:N
-        id = threadid()
+    @sync for i = 1:N
+        @spawn begin
+            # set adjoint final condition
+            out[i] .= w[i]
 
-        # set adjoint final condition
-        out[i] .= w[i]
+            # integration span
+            span = (T - (i-1)*T/N, T - i*T/N)
 
-        # integration span
-        span = (T - (i-1)*T/N, T - i*T/N)
+            # integrate linearised equations
+            Ls[i](out[i], store, span)
 
-        # integrate linearised equations
-        Ls[id](out[i], store, span)
+            # apply shift on last segment
+            NS == 2 && i == N && S(out[i], -s)
 
-        # apply shift on last segment
-        NS == 2 && i == N && S(out[i], -s)
-
-        # this is the identity operator
-        out[i] .-= w[i%N + 1]
+            # this is the identity operator
+            out[i] .-= w[i%N + 1]
+        end
     end
 
     # right columns

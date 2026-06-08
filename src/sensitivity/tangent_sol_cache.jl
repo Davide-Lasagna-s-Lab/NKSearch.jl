@@ -1,7 +1,7 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-import Base.Threads: threadid, @threads, nthreads
+import Base.Threads: @sync, @spawn
 import LinearAlgebra: dot
 import GMRES: gmres!
 import Flows
@@ -29,9 +29,10 @@ function make_tangent_problem(z::MVector{X, N, NS},
                               S,
                               D) where {X, N, NS}
 
-    # make copies of the propagators, one for each thread
-    Ls = ntuple(i->deepcopy(L), nthreads())
-    Js = ntuple(i->deepcopy(J), nthreads())
+    # make copies of the propagators, one per segment (see the threading
+    # note in newton.jl on why we avoid threadid()-indexed buffers)
+    Ls = ntuple(i->deepcopy(L), N)
+    Js = ntuple(i->deepcopy(J), N)
 
     # temporary
     tmp = similar(z[1])
@@ -51,21 +52,21 @@ function make_tangent_problem(z::MVector{X, N, NS},
     # right hand side
     rhs = similar(z)
 
-    @threads :static for i = 1:N
-        # note that store must be thread safe
-        id = threadid()
+    @sync for i = 1:N
+        @spawn begin
+            # note that store must be thread safe
+            # integration span
+            span = ((i-1)*T/N, i*T/N)
 
-        # integration span
-        span = ((i-1)*T/N, i*T/N)
+            # set homogeneous initial condition
+            rhs[i] .= 0
 
-        # set homogeneous initial condition
-        rhs[i] .= 0
+            # integrate non-homogeneous equations over the i-th span
+            Js[i](rhs[i], store, span)
 
-        # integrate non-homogeneous equations over the i-th span
-        Js[id](rhs[i], store, span)
-
-        # flip sign for the right hand side
-        rhs[i] .*= -1.0
+            # flip sign for the right hand side
+            rhs[i] .*= -1.0
+        end
     end
 
     # we need to "back-shift" the last state it if we have a symmetry
@@ -109,24 +110,23 @@ function mul!(out::MVector{X, N, NS},
     s     = NS == 2 ? mm.z.d[2] : 0.0
 
     # compute L{x0[i]}⋅w[i] - w[i+1]
-    @threads :static for i = 1:N
-        # this thread id
-        id = threadid()
+    @sync for i = 1:N
+        @spawn begin
+            # set perturbation initial condition
+            out[i] .= w[i]
 
-        # set perturbation initial condition
-        out[i] .= w[i]
+            # integration span
+            span = ((i-1)*T/N, i*T/N)
 
-        # integration span
-        span = ((i-1)*T/N, i*T/N)
+            # integrate linearised equations
+            Ls[i](out[i], store, span)
 
-        # integrate linearised equations
-        Ls[id](out[i], store, span)
+            # apply shift on last segment
+            NS == 2 && i == N && S(out[i], s)
 
-        # apply shift on last segment
-        NS == 2 && i == N && S(out[i], s)
-
-        # this is the identity operators on the upper diagonal
-        out[i] .-= w[i%N + 1]
+            # this is the identity operators on the upper diagonal
+            out[i] .-= w[i%N + 1]
+        end
     end
 
     # Add time and space derivative of state at end point. Note that
