@@ -20,8 +20,32 @@ struct AdjointProblemLHS{X, N, NS, LST, ST, DT, CT}
      store::CT                # store
 end
 
-# TODO: test interface with no shift
-# Main outer constructor
+"""
+    make_adjoint_problem(z, store, L, J, S, D, jTJ) -> (A, rhs)
+    make_adjoint_problem(z, store, L, J,    D, jTJ) -> (A, rhs)   # no shift
+
+Assemble the linear system for the **adjoint** sensitivity of a converged
+(relative) periodic orbit `z`. Returns a matrix-free operator `A` (callable
+as `A * w` and usable with GMRES) together with its right-hand side `rhs`.
+
+# Arguments
+- `z::MVector`: a *converged* orbit (see [`search!`](@ref)).
+- `store`: a thread-safe trajectory cache that returns the orbit state and
+  its time derivative at a requested time, callable as `store(out, t, Val(k))`
+  for derivative order `k`.
+- `L`: homogeneous adjoint flow operator.
+- `J`: inhomogeneous (forcing) adjoint operator.
+- `S`, `D`: spatial-shift operator and the time/space derivative operators,
+  as for [`search!`](@ref) (`S` omitted in the no-shift form).
+- `jTJ::Real`: the cost-gradient scalar placed in the bottom rows of `rhs`.
+
+!!! warning "Experimental"
+    The sensitivity interface is still being stabilised; argument
+    conventions (especially the `store` and adjoint-operator contracts) may
+    change, and the no-shift path is not yet covered by tests. The companion
+    tangent problem is built by the (currently unexported)
+    `NKSearch.make_tangent_problem`.
+"""
 function make_adjoint_problem(z::MVector{X, N, NS},
                               store,
                               L,
