@@ -107,7 +107,7 @@ function save(z::MVector{X, N, NS}, path::String) where {X, N, NS}
     end
 end
 
-# Return integer N such that M/N is integer, where T/Tmin < N < T/Tmax.
+# Return integer N such that M/N is integer, where T/Tmax < N < T/Tmin.
 # Return 0 if no such integer can be found
 function find_number_of_segments(M::Int, T::Real, Tmin::Real, Tmax::Real)
     Nmin = Int(floor(T/Tmin))
