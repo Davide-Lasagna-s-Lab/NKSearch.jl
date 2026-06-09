@@ -2,7 +2,7 @@
   <img src="docs/src/assets/logo.svg" alt="NKSearch.jl logo" width="640">
 </p>
 
-[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://Davide-Lasagna-s-Lab.github.io/NKSearch.jl/dev/)
+[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://davide-lasagna-s-lab.github.io/NKSearch.jl/dev/)
 
 # NKSearch.jl
 
