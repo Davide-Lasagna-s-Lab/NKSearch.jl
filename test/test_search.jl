@@ -12,10 +12,9 @@
              RK4(couple(zeros(2), zeros(2)), Flows.NormalMode()),
              TimeStepConstant(1e-3))
 
-    # FIXME: tr_direct does not pass
-    for method in (#:tr_direct,
-                   #:ls_direct,
-                   #:ls_iterative,
+    for method in (:ls_direct,
+                   :ls_iterative,
+                   :tr_direct,
                    :tr_iterative,
                    )
         # define initial guess, a slightly perturbed orbit
