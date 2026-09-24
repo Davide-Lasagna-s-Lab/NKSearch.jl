@@ -16,3 +16,6 @@ SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 julia = "1.6"
 # TODO: add bounds for Flows, GMRES, HDF5 and Parameters once their
 # versions are pinned in the working environment.
+
+[workspace]
+projects = ["test"]
