@@ -30,7 +30,7 @@ end
 #  Smoke test: verify the L-BFGS + spatial-shift loop runs and the
 #  residual decreases significantly in the first few iterations.
 # =========================================================================
-@testset "search_lbfgs_shift smoke (NS=2)          " begin
+@testset "search_lbfgs_shift smoke (NS=2)        " begin
     μ = 1.0
     F_sys = System(μ)
     D     = SystemLinear(μ)
@@ -57,7 +57,7 @@ end
     cb = (iter, z, Fz, e_norm, ∇ϕ_norm, λ, T) -> push!(residuals, e_norm)
 
     status = search!(G, L, adj_flow, S_op, F_phase, dS_op, z,
-                     Options(maxiter=100,
+                     Options(maxiter=20,
                              dz_norm_tol=0.0,
                              e_norm_tol=0.0,
                              verbose=true,

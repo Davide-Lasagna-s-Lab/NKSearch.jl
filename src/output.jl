@@ -70,9 +70,9 @@ function display_status_hks(io::IO, iter, which, dz_norm, e_norm, rho, tr_radius
 end
 
 # LBFGS
-const _header_lbfgs = "+------+--------+---------------+---------------+------------+\n"*
-                       "| iter | which  |    ||∇ϕ||     |     ||F||     |     λ     |\n"*
-                       "+------+--------+---------------+---------------+------------+\n"
+const _header_lbfgs = "+------+--------+-----------+-----------+------------+\n"*
+                      "| iter | which  |  ||∇ϕ||   |   ||F||   |     λ      |\n"*
+                      "+------+--------+-----------+-----------+------------+\n"
 
 display_header_lbfgs(io::IO, ::MVector{X, N, NS}) where {X, N, NS} =
     (print(io, _header_lbfgs); flush(io))

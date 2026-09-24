@@ -35,7 +35,7 @@ struct StageIterCache{X, N, NS, GST, LST, ST, DT, SCT}
            S::ST                # space shift operator
            D::DT                # phase-locking derivative operators
           xT::NTuple{N, X}      # end-of-segment states (populated by update!)
-      dxTdT::NTuple{N, X}      # time derivative f(φ_i), shifted if NS==2
+       dxTdT::NTuple{N, X}      # time derivative f(φ_i), shifted if NS==2
          tmp::NTuple{N, X}      # temporary storage (one per segment)
           z0::MVector{X, N, NS} # current orbit
 stage_caches::SCT               # stage caches (one per segment)
@@ -46,8 +46,8 @@ function StageIterCache(Gs, Ls, S, D, z0::MVector{X, N, NS}) where {X, N, NS}
     nstages = Flows.nstages(Gs[1].meth)
     stage_caches = ntuple(i -> RAMStageCache(nstages, z0[1]), N)
     StageIterCache(Gs, Ls, S, D,
-                   similar.(z0.x),
-                   similar.(z0.x),
+                   ntuple(i -> similar(z0[1]), N),
+                   ntuple(i -> similar(z0[1]), N),
                    ntuple(i -> similar(z0[1]), N),
                    similar(z0),
                    stage_caches)
@@ -174,14 +174,14 @@ transpose applies `S(·, -s)` to `w[N]` *before* the adjoint
 integration, matching the forward composition `S ∘ Dϕ_N`.
 """
 struct AdjointIterSolCache{X, N, NS, LAT, DT, ST, SCT}
-    Ls_adj::LAT            # adjoint flows (user-provided, one per segment)
-         D::DT             # phase-locking derivative operators
-         S::ST             # spatial shift operator (nothing for NS == 1)
-        xT::NTuple{N, X}   # end-of-segment states (from fwd update!)
-    dxTdT::NTuple{N, X}    # time derivatives f(φ_i) (from fwd update!)
-        z0::MVector{X, N, NS}
-      tmp::NTuple{N, X}    # shared with fwd cache
-stage_caches::SCT          # stage caches (one per segment)
+      Ls_adj::LAT            # adjoint flows (user-provided, one per segment)
+           D::DT             # phase-locking derivative operators
+           S::ST             # spatial shift operator (nothing for NS == 1)
+          xT::NTuple{N, X}   # end-of-segment states (from fwd update!)
+       dxTdT::NTuple{N, X}   # time derivatives f(φ_i) (from fwd update!)
+          z0::MVector{X, N, NS}
+         tmp::NTuple{N, X}   # shared with fwd cache
+stage_caches::SCT            # stage caches (one per segment)
 end
 
 # Main interface for AdjointIterSolCache

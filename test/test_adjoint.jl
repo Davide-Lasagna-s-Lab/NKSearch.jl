@@ -1,10 +1,6 @@
 # ----------------------------------------------------------------- #
 # Test: Adjoint identity  ⟨J·v, w⟩ = ⟨v, J^T·w⟩  for random v, w    #
 # ----------------------------------------------------------------- #
-using Test
-using NKSearch
-using LinearAlgebra
-using Flows
 using Random
 
 # ============================================================
