@@ -78,4 +78,7 @@ end
     f, dict = load_seeds!(identity, "test2.file")
     @test f[1] == e[1]
     @test f.d  == e.d
+    
+    # clean-up
+    rm("test.file"); rm("test2.file")
 end

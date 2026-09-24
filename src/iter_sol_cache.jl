@@ -7,7 +7,7 @@ import GMRES: gmres!
 import Flows
 
 # ~~~ Matrix Type ~~~
-struct IterSolCache{X, N, NS, M, GST, LST, ST, DT, MT}
+struct IterSolCache{X, N, NS, ORDERING, M, GST, LST, ST, DT, MT}
        Gs::GST               # flow operator(s)
        Ls::LST               # linearised flow operator (s)
         S::ST                # space shift operator
@@ -18,19 +18,31 @@ struct IterSolCache{X, N, NS, M, GST, LST, ST, DT, MT}
        z0::MVector{X, N, NS} # current orbit
      mons::MT                # monitor
      opts::Options           # options
+
+     function IterSolCache{X, N, NS, ORDERING}(Gs::GST,
+                                               Ls::LST,
+                                                S::ST,
+                                                D::DT,
+                                               xT::NTuple{N, X},
+                                            dxTdT::NTuple{N, X},
+                                              tmp::NTuple{M, X},
+                                               z0::MVector{X, N, NS},
+                                             mons::MT, opts) where {X, N, NS, ORDERING, M, GST, LST, ST, DT, MT}
+        new{X, N, NS, ORDERING, M, GST, LST, ST, DT, MT}(Gs, Ls, S, D, xT, dxTdT, tmp, z0, mons, opts)
+     end
 end
 
 # Main outer constructor
 function IterSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS}
     mon_type = opts.fd_order == 1 ? Flows.StoreNFromLast{0} : Flows.StoreNFromLast{2}
     ntmps = opts.fd_order == 1 ? nsegments(z0) : 2*nsegments(z0)
-    IterSolCache(Gs, Ls, S, D,
-                 similar.(z0.x),
-                 similar.(z0.x),
-                 ntuple(i->similar(z0[1]), ntmps),
-                 similar(z0),
-                 ntuple(i->mon_type(z0[1]), nsegments(z0)),
-                 opts)
+    IterSolCache{X, N, NS, opts.row_order}(Gs, Ls, S, D,
+                                           similar.(z0.x),
+                                           similar.(z0.x),
+                                           ntuple(i->similar(z0[1]), ntmps),
+                                           similar(z0),
+                                           ntuple(i->mon_type(z0[1]), nsegments(z0)),
+                                           opts)
 end
 
 # Main interface is matrix-vector product exposed to the Krylov solver
@@ -38,8 +50,8 @@ Base.:*(mm::IterSolCache{X}, δz::MVector{X}) where {X} = mul!(similar(δz), mm,
 
 # Compute mat-vec product
 function mul!(out::MVector{X, N, NS},
-               mm::IterSolCache{X, N, NS},
-               δz::MVector{X, N, NS}) where {X, N, NS}
+               mm::IterSolCache{X, N, NS, ORDERING},
+               δz::MVector{X, N, NS}) where {X, N, NS, ORDERING}
     # aliases
     xT    = mm.xT
     Ls    = mm.Ls
@@ -52,31 +64,33 @@ function mul!(out::MVector{X, N, NS},
 
     # comput L{x0[i]}-δz[i] - δz[i+1]
     @sync for i in 1:N
+        j = ORDERING == :ashtari ? i%N + 1 : i
         @spawn begin
             # set perturbation initial condition
-            out[i] .= δz[i]
+            out[j] .= δz[i]
 
             # set nonlinear initial condition
             tmp[i] .= z0[i]
 
             # propagate by T/N
-            Ls[i](Flows.couple(tmp[i], out[i]), (0, T/N))
+            Ls[i](Flows.couple(tmp[i], out[j]), (0, T/N))
 
             # apply shift on last segment (if we have one)
-            NS == 2 && i == N && S(out[i], z0.d[2])
+            NS == 2 && i == N && S(out[j], z0.d[2])
 
             # this is the identity operators on the upper diagonal
-            out[i] .-= δz[i%N + 1]
+            out[j] .-= δz[i%N + 1]
         end
     end
 
     # period derivative
     for i = 1:N
-        out[i] .+= dxTdT[i].*(δz.d[1]./N)
+        j = ORDERING == :ashtari ? i%N + 1 : i
+        out[j] .+= dxTdT[i].*(δz.d[1]./N)
     end
 
     # shift derivative (if present) goes only on last element
-    NS == 2 && (out[N] .+= D[2](tmp[1], xT[N]).*δz.d[2])
+    NS == 2 && (out[ORDERING == :ashtrari ? 1 : N] .+= D[2](tmp[1], xT[N]).*δz.d[2])
 
     # add phase locking constraints
     out.d = ntuple(j->dot(δz[1], D[j](tmp[1], z0[1])), NS)
@@ -85,10 +99,10 @@ function mul!(out::MVector{X, N, NS},
 end
 
 # Update the linear operator and rhs arising in the Newton-Raphson iterations
-function update!(mm::IterSolCache{X, N, NS},
+function update!(mm::IterSolCache{X, N, NS, ORDERING},
                   b::MVector{X, N, NS},
                  z0::MVector{X, N, NS},
-               opts::Options) where {X, N, NS}
+               opts::Options) where {X, N, NS, ORDERING}
 
     # store this vector for the products
     mm.z0 .= z0
@@ -130,7 +144,8 @@ function update!(mm::IterSolCache{X, N, NS},
     # ~~ RIGHT HAND SIDE ~~
     # calculate negative error
     for i = 1:N
-        b[i] .= z0[i%N+1] .- xT[i]
+        j = ORDERING == :ashtari ? i%N + 1 : i
+        b[j] .= z0[i%N+1] .- xT[i]
     end
 
     # reset shifts

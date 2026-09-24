@@ -12,11 +12,15 @@
              RK4(couple(zeros(2), zeros(2)), Flows.NormalMode()),
              TimeStepConstant(1e-3))
 
-    for method in (#:ls_direct,      # only works with single thread (julia -t 1)
-                   :ls_iterative,   
-                   #:tr_direct,      # only works with single thread (julia -t 1)
-                   :tr_iterative,
-                   )
+    # define methods
+    methods = (#:ls_direct,      # only works with single thread (julia -t 1)
+               :ls_iterative,   
+               #:tr_direct,      # only works with single thread (julia -t 1)
+               :tr_iterative,
+               )
+    orderings = (:regular, :ashtari)
+
+    for method in methods, ordering in orderings
         # define initial guess, a slightly perturbed orbit
         z = MVector(([2, 0.0], [-2, 0.0]), 2π)
 
@@ -34,7 +38,8 @@
                         tr_radius_init=0.001,
                         method=method,
                         ϵ=1e-7,
-                        gmres_start=dz->dz))
+                        gmres_start=dz->dz,
+                        row_order=ordering))
 
         # solution is a loop of unit radius and with T = 2π
         @test maximum( map(el->norm(el)-1, z.x) ) < 1e-9

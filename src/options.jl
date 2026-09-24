@@ -30,6 +30,8 @@ defaults; only override what you need.
   printing (`io` receives a table, every `skipiter` iterations).
 - `callback = (iter, z) -> false`: called after each iteration; returning
   `true` terminates the search.
+- `row_order::Symbol`: either `:regular`, `:ashtari`, represents the order
+  of rows in the Newton system solved by GMRES
 
 # Line-search options
 - `ls_maxiter::Int = 10`, `ls_rho::Float64 = 0.5`: maximum backtracking
@@ -72,6 +74,7 @@ opts = Options(method=:tr_iterative, maxiter=25,
     ϵ::Float64              = 1e-6                 # dt for finite difference approximation
                                                    # of the derivative of the flow operator
     callback::CB            = (iter, z, Fz, f_norm, ∇ϕ_norm, λ, T) -> false
+    row_order::Symbol       = :ashtari             # row ordering for Newton system
 
     # line search parameters
     ls_method::Symbol       = :backtracking        # line search method
@@ -100,4 +103,5 @@ opts = Options(method=:tr_iterative, maxiter=25,
     @assert skipiter > 0
     @assert fd_order in (1, 2)
     @assert ls_method in (:backtracking,)
+    @assert row_order in (:regular, :ashtari)
 end
