@@ -10,52 +10,65 @@ export Options
 """
     Options(; kwargs...)
 
-Configuration for [`search!`](@ref). All fields are keyword arguments with
-defaults; only override what you need.
+Configure a Newton or L-BFGS shooting search. Only override the needed options.
 
-# Key options
-- `method::Symbol = :ls_direct`: globalization + linear-solve strategy, one
-  of `:ls_direct`, `:ls_iterative`, `:tr_direct`, `:tr_iterative`. The
-  `ls_` variants use a line search, the `tr_` variants a trust region
-  (dogleg for `:tr_direct`, hookstep for `:tr_iterative`). The `_direct`
-  variants assemble and LU-factorise the Jacobian; the `_iterative`
-  variants solve it matrix-free with GMRES. See the manual for guidance.
-- `maxiter::Int = 10`: maximum number of Newton iterations.
-- `e_norm_tol::Float64 = 1e-10`: convergence tolerance on the residual norm.
-- `dz_norm_tol::Float64 = 1e-10`: convergence tolerance on the Newton step norm.
-- `ϵ::Float64 = 1e-6`: step used for the finite-difference approximation of
-  the time derivative of the flow operator.
-- `fd_order::Int = 2`: order (1 or 2) of that finite-difference scheme.
-- `verbose::Bool = true`, `io = stdout`, `skipiter::Int = 1`: control status
-  printing (`io` receives a table, every `skipiter` iterations).
-- `callback = (iter, z) -> false`: called after each iteration; returning
-  `true` terminates the search.
-- `row_order::Symbol`: either `:regular`, `:ashtari`, represents the order
-  of rows in the Newton system solved by GMRES
+# Method and stopping
+- `method=:ls_direct`: `:ls_direct`, `:ls_iterative`, `:tr_direct`,
+  `:tr_iterative`, or `:lbfgs_opt`. The first four are Newton methods;
+  L-BFGS requires the `search!` overload with a discrete adjoint flow.
+- `maxiter=10`: maximum outer iterations.
+- `e_norm_tol=1e-10`: residual stopping tolerance.
+- `dz_norm_tol=1e-10`: correction stopping tolerance. Newton trust-region
+  drivers label a small correction `:converged`, even without small closure;
+  L-BFGS returns `:min_step_reached`. Independently check the final residual.
+- `e_norm_type=:euclidean`: L-BFGS reporting/stopping norm, either
+  `:euclidean` or `:max_segment`. The objective remains the full squared norm.
+  Newton drivers currently use the Euclidean residual regardless of this option.
+- `verbose=true`, `io=stdout`, `skipiter=1`: progress output destination/cadence.
 
-# Line-search options
-- `ls_maxiter::Int = 10`, `ls_rho::Float64 = 0.5`: maximum backtracking
-  iterations and step-reduction factor.
+# Newton period differences
+- `ϵ=1e-6`: time increment for the finite-difference period column.
+- `fd_order=2`: forward (`1`) or centred (`2`) period difference.
+  These do not control `JFOp.epsilon` or the L-BFGS adjoint gradient.
+- `row_order=:ashtari`: row arrangement of the iterative Newton operator;
+  `:regular` retains segment order. This is not a physical change of unknowns.
 
-# GMRES options (iterative methods)
-- `gmres_maxiter::Int = 10`, `gmres_rtol::Float64 = 1e-3`,
-  `gmres_verbose::Bool = true`, `gmres_callback = nothing`,
-  `gmres_start = dz -> (dz .*= 0; dz)`: GMRES iteration count, relative
-  tolerance, verbosity, callback, and warm-start initialiser.
+# Line search
+- `ls_maxiter=10`, `ls_rho=0.5`: maximum trials and contraction factor.
+- `ls_method=:backtracking`: the supported line-search choice.
+  Both Newton line search and L-BFGS seek strict decrease, not Wolfe conditions.
+  L-BFGS currently falls back to a full step if all trials fail.
 
-# Trust-region options (`tr_` methods)
-- `tr_radius_init::Float64 = 1`, `tr_radius_max::Float64 = 1e8`: initial and
-  maximum trust-region radius.
-- `min_step::Float64 = 1e-4`: minimum accepted step before stopping.
-- `NR_lim::Float64 = 1e-8`: residual level below which a full Newton step is
-  taken regardless of the trust-region test.
-- `α::Float64 = 1`, `eta::Float64 = 0.0`: over-relaxation factor and the
-  minimum reduction ratio for accepting a step.
+# GMRES (iterative Newton only)
+- `gmres_maxiter=10`, `gmres_rtol=1e-3`, `gmres_verbose=true`: inner solve.
+- `gmres_callback=nothing`: passed to GMRES.
+- `gmres_start=dz -> (dz .*= 0.0; dz)`: initialises the hookstep correction.
+
+# Trust region (Newton only)
+- `tr_radius_init=1.0`, `tr_radius_max=1e8`: initial and maximum radius.
+- `min_step=1e-4`: trust-region subproblem step threshold.
+- `NR_lim=1e-8`: residual threshold below which a full Newton step is used.
+- `eta=0.0`: acceptance ratio threshold.
+- `α=1.0`: relaxation of the near-root step in the direct trust-region driver.
+
+# L-BFGS
+- `lbfgs_memory=10`: positive number of stored correction pairs.
+  The forward integration stages require additional memory.
+
+# Callbacks
+The default `(args...) -> false` accepts the method-specific arguments:
+- Hookstep: `callback(iter, z, rhs, error, 0.0, 1.0, T, cache)` runs before
+  the iteration's cache update; `true` stops with `:callback_satisfied`.
+  The copied `rhs` is stale and is uninitialised on the first call.
+- L-BFGS: `callback(iter, z, residual, error, gradient_norm, step, T)` runs
+  at iteration zero and after updates. Its return value is ignored. The
+  gradient can be stale when the residual already meets tolerance.
+- Direct trust region and Newton line search do not invoke `callback`.
 
 # Example
 ```julia
 opts = Options(method=:tr_iterative, maxiter=25,
-               e_norm_tol=1e-12, gmres_maxiter=5, verbose=false)
+               e_norm_tol=1e-10, gmres_maxiter=20)
 ```
 """
 @with_kw struct Options{GT, W, CB}
@@ -67,7 +80,7 @@ opts = Options(method=:tr_iterative, maxiter=25,
     verbose::Bool           = true                 # print iteration status
     dz_norm_tol::Float64    = 1e-10                # tolerance on correction
     e_norm_tol::Float64     = 1e-10                # tolerance on residual
-    e_norm_type::Symbol     = :euclidean           # :euclidean or :max_segment
+    e_norm_type::Symbol     = :euclidean           # L-BFGS stopping norm: :euclidean or :max_segment
     fd_order::Int           = 2                    # use forward or central difference scheme
                                                    # to approximate the derivative of the flow
                                                    # operator
@@ -96,7 +109,7 @@ opts = Options(method=:tr_iterative, maxiter=25,
     tr_radius_max::Float64  = 10^8                 # maximum trust region radius
     eta::Float64            = 0.00                 # maximum trust region radius
 
-    # L-BFGS parameters
+    # L-BFGS history; independent of GMRES and trust-region settings
     lbfgs_memory::Int       = 10                   # number of history vectors for L-BFGS
 
     @assert method in (:tr_direct, :ls_direct, :ls_iterative, :tr_iterative, :lbfgs_opt)

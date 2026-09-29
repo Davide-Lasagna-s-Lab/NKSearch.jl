@@ -26,14 +26,17 @@ L\\{x\\} y \\approx \\frac{G(x + \\epsilon\\, y) - G(x)}{\\epsilon}
 
 # Usage
 Call it like the exact linearised operator,
-`op(Flows.couple(x, y), (0, T))`, which advances base state `x` and
-perturbation `y` in place. The base trajectory `G(x, span)` is cached
+`op(Flows.couple(x, y), (0, T))`, which overwrites perturbation `y` in place. On a cache miss `x` is also
+advanced; on a cache hit it is left unchanged. Do not rely on the returned
+base component when using this approximate operator. The base trajectory `G(x, span)` is cached
 (keyed by `span` and `x`) so it is not recomputed for repeated perturbations
 about the same point.
 
 !!! warning
     The quotient is a first-order forward difference regardless of
-    `Options.fd_order`, and `x` must be real-valued.
+    `Options.fd_order`, and `x` must be real-valued. The increment is not
+    rescaled by the norm of the direction. Cache keys are hashes, so invalidate
+    or rebuild the operator after changing the dynamics or integrator settings.
 """
 mutable struct JFOp{X, GT}
           G::GT                # operator
@@ -62,7 +65,7 @@ function (op::JFOp)(xy::Flows.Coupled{2}, span::NTuple{2, Real})
     # aliases
     xT, xTp = op.tmps
 
-    # perturbed calculation
+    # Evaluate the perturbed trajectory; all work arrays belong to this operator.
     xTp .= x .+ op.epsilon.*y#./norm(y).*norm(x)
     op.G(xTp, span)
 
@@ -73,7 +76,7 @@ function (op::JFOp)(xy::Flows.Coupled{2}, span::NTuple{2, Real})
         xT .= x
     end
 
-    # calc finite difference
+    # Subtract the cached unperturbed endpoint and divide by the fixed increment.
     y .= (xTp .- xT)./op.epsilon
 
     return xy

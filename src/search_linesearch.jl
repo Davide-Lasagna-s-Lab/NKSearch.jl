@@ -61,7 +61,7 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
         dz_norm < opts.dz_norm_tol && break # norm of orbit correction
     end
 
-    # return input
+    # The candidate was updated in place; this driver returns no status.
     return nothing
 end
 

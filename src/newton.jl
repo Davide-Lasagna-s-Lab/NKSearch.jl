@@ -4,10 +4,9 @@
 
 export search!
 
-# NOTE: multithreading only works reliably (no race conditions) if the number of threads
-# NOTE: equals the number of segments used for the multiple-shooting.
-# NOTE: See https://julialang.org/blog/2023/07/PSA-dont-use-threadid/ for details
-# NOTE: on the faulty pattern that is being used that causes the problems encountered.
+# Each segment owns a deep-copied flow and its work arrays. Tasks are indexed
+# by segment, not threadid(); the thread count need not equal the segment count.
+# Shared derivative/shift callables must not mutate shared scratch storage.
 
 # Arguments
 # ---------
@@ -25,17 +24,26 @@ export search!
 """
     search!(G, L, S, F, dS, z0::MVector{X,N,2}, opts=Options()) -> status
     search!(G, L,       F,     z0::MVector{X,N,1}, opts=Options()) -> status
+    search!(G, L, L_adj, F, z0::MVector{X,N,1}, opts) -> status
+    search!(G, L, L_adj, S, F, dS, z0::MVector{X,N,2}, opts) -> status
 
 Refine the candidate orbit `z0` in place with a Newton–Krylov / multiple-
 shooting iteration until convergence or `opts.maxiter` is reached.
 
-Use the 6-argument form to search for a **relative periodic orbit** (an orbit
+Use the relative-orbit form to search for a **relative periodic orbit** (an orbit
 closing up to a spatial shift, `z0` has a shift unknown, `NS == 2`), and the
-4-argument form for an ordinary **periodic orbit** (`NS == 1`).
+ordinary-orbit form for an ordinary **periodic orbit** (`NS == 1`).
 
-`z0` is overwritten with the refined orbit. The return value is a status
-symbol such as `:converged`, `:maxiter_reached`, `:min_step_reached`, or
-`:callback_satisfied`.
+`z0` is overwritten. Line-search Newton methods return `nothing`; trust-region
+and L-BFGS methods return a status symbol. Newton trust-region methods can
+return `:converged` on a small correction even if closure is not below tolerance.
+Always verify the final residual. Only the hookstep method honours a stopping
+callback; L-BFGS callbacks are observers.
+
+The overloads with `L_adj` require `opts.method == :lbfgs_opt`. They minimise
+the squared shooting residual using Flows stage caches, a discrete tangent
+`L(v, stages)` and a discrete adjoint `L_adj(w, stages)`. They do not accept
+`JFOp` as a replacement for the adjoint.
 
 # Arguments
 - `G`: nonlinear flow operator. `G(x, (0, T))` advances state `x` in place
@@ -54,14 +62,18 @@ symbol such as `:converged`, `:maxiter_reached`, `:min_step_reached`, or
   [`MVector`](@ref).
 - `opts::Options`: solver settings; see [`Options`](@ref).
 
-`G` and `L` are deep-copied once per shooting segment, so the same operator
+Newton also calls `G(x, span, monitor)` to save a restart state for period
+differences. The saved state must be restart-complete. Dynamics are assumed
+autonomous because each segment starts at local time zero.
+
+`G` and `L` (and `L_adj` when present) are deep-copied per segment, so the same operator
 instance can be passed for all segments.
 
 !!! note "Threading"
     The iterative methods (`:ls_iterative`, `:tr_iterative`) parallelise the
-    shooting segments across tasks; run Julia with as many threads as there
-    are segments. The direct methods (`:ls_direct`, `:tr_direct`) require a
-    single thread.
+    shooting segments across tasks with separate caches. One or more threads
+    may be used. The direct methods (`:ls_direct`, `:tr_direct`) require a
+    single thread. Shared user callables must be safe for concurrent calls.
 
 # Example
 ```julia

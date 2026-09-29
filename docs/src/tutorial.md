@@ -118,10 +118,12 @@ println("converged to the unit limit cycle")
 
 ## Where to go next
 
-- Try other [Solver methods](@ref) by changing `method` (for a 2×2 system the
+- Try other Newton [Solver methods](@ref) by changing `method` (for a 2×2 system the
   `:ls_direct` and `:tr_direct` methods are fine and run single-threaded).
 - For a relative periodic orbit, build the guess with a shift,
-  `MVector((x1, x2), T, s)`, and call the six-argument
+  `MVector((x1, x2), T, s)`, and call the relative-orbit overload
   `search!(G, L, S, F, dS, z, opts)`.
+- For `:lbfgs_opt`, use the separate [L-BFGS search](lbfgs.md) example: it
+  requires discrete stage-cached tangent and adjoint flows.
 - Save and reload converged orbits with [`save_seeds`](@ref) /
   [`load_seeds!`](@ref).

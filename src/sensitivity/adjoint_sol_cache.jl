@@ -9,7 +9,7 @@ export make_adjoint_problem
 
 # ~~~ Matrix Type ~~~
 struct AdjointProblemLHS{X, N, NS, LST, ST, DT, CT}
-        Ls::LST               # homogeneous adjoint operators (one per thread)
+        Ls::LST               # homogeneous adjoint operators (one per segment)
          S::ST                # space shift operator
          D::DT                # time (and space) derivative operator
         x0::X                 # initial point
@@ -83,7 +83,7 @@ function make_adjoint_problem(z::MVector{X, N, NS},
             # integration span
             span = (T - (i-1)*T/N, T - i*T/N)
 
-            # set homogeneus initial condition
+            # set homogeneous initial condition
             rhs[i] .= 0
 
             # propagate
