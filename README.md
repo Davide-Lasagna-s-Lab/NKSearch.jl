@@ -22,9 +22,9 @@ only up to a continuous spatial symmetry: `S(G(x₀, T), s) = x₀`. Both the or
 point `x₀` and the scalars `T` (and `s`) are unknowns.
 
 NKSearch solves the shooting equations with a globalized Newton iteration,
-or minimises their squared residual using an adjoint-based L-BFGS search. The Jacobian can be assembled and factorised
-directly, or applied matrix-free and inverted with GMRES — the latter scales to
-the large states typical of discretised PDEs.
+or minimises their squared residual using an adjoint-based L-BFGS search.
+Newton methods use either an assembled Jacobian or matrix-free GMRES; L-BFGS
+uses adjoint gradients and a limited-memory inverse-Hessian approximation.
 
 ## When should I use this?
 
@@ -74,7 +74,7 @@ has no preferred spatial phase. In the Newton methods, these degeneracies are re
 constraints** built from the right-hand side `f` (time phase) and the shift
 generator (spatial phase) — the `F` and `dS` arguments to `search!`.
 
-### Operators you provide
+### Newton operators
 
 | Operator | Role | Call signature |
 |----------|------|----------------|
@@ -100,12 +100,35 @@ Set `Options(method = …)`:
 | `:tr_iterative` | trust region (hookstep) | GMRES (matrix-free) | segment tasks |
 | `:lbfgs_opt` | objective backtracking | none; adjoint gradient | segment tasks |
 
-The L-BFGS method has a different operator contract, described below.
 Use a `_direct` method for small states where forming the Jacobian is cheap;
 use an `_iterative` method for large states. Trust-region (`tr_`) methods tend
 to be more robust far from the solution than line search.
 
-## Minimal working example
+### Adjoint-based L-BFGS search
+
+Select `Options(method=:lbfgs_opt)` to minimise half the squared
+multiple-shooting mismatch. This method updates the orbit points and period
+using a limited-memory approximation to the inverse Hessian, without an inner
+GMRES solve. It requires a stage-caching nonlinear Flows integrator and its
+discrete tangent and adjoint flows:
+
+```julia
+# G, L and L_adj must use compatible integration stages.
+status = search!(G, L, L_adj, F, z,
+    Options(method=:lbfgs_opt, lbfgs_memory=10, maxiter=200,
+            ls_maxiter=20, ls_rho=0.5, e_norm_tol=1e-8))
+```
+
+`F(out, x)` supplies the vector field. `JFOp` alone cannot supply the adjoint
+needed here; use a Newton–Krylov method when only finite-difference
+Jacobian–vector products are available. A small gradient can indicate a
+nonzero-residual local minimum, so acceptance must be based on the orbit
+closure residual. Stage storage can dominate memory for long trajectories.
+
+See [the L-BFGS guide](docs/src/lbfgs.md) for the objective, a complete example,
+operator contracts and current implementation limitations.
+
+## Newton–Krylov example
 
 The Viswanath (2001) system has the unit circle as a stable limit cycle of
 period `2π`. Starting from a deliberately wrong two-segment guess (radius 2),
@@ -182,27 +205,3 @@ This is a research package. The public API is the set of exported symbols
 documented above; internal types (the solution caches, the sensitivity
 problems) may change. Sensitivity analysis (tangent/adjoint of a converged
 orbit) is available but still being stabilised.
-
-## Adjoint-based L-BFGS search
-
-Select `Options(method=:lbfgs_opt)` to minimise half the squared
-multiple-shooting mismatch. This method updates the orbit points and period
-using a limited-memory approximation to the inverse Hessian, without an inner
-GMRES solve. It requires a stage-caching nonlinear Flows integrator and its
-discrete tangent and adjoint flows:
-
-```julia
-# G, L and L_adj must use compatible integration stages.
-status = search!(G, L, L_adj, F, z,
-    Options(method=:lbfgs_opt, lbfgs_memory=10, maxiter=200,
-            ls_maxiter=20, ls_rho=0.5, e_norm_tol=1e-8))
-```
-
-`F(out, x)` supplies the vector field. `JFOp` alone cannot supply the adjoint
-needed here; use a Newton–Krylov method when only finite-difference
-Jacobian–vector products are available. A small gradient can indicate a
-nonzero-residual local minimum, so acceptance must be based on the orbit
-closure residual. Stage storage can dominate memory for long trajectories.
-
-See [the L-BFGS guide](docs/src/lbfgs.md) for the objective, a complete example,
-operator contracts and current implementation limitations.
