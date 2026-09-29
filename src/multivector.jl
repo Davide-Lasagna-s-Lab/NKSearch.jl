@@ -108,34 +108,34 @@ Base.BroadcastStyle(::Broadcast.DefaultArrayStyle{1},
                     ::Broadcast.ArrayStyle{MVector}) = Broadcast.DefaultArrayStyle{1}()
 
 """
-    tovector(z::MVector) -> Vector{Float64}
+    tovector(z::MVector) -> Vector{<:Number}
 
-Flatten `z` into a freshly allocated `Vector{Float64}` of length
+Flatten `z` into a freshly allocated `Vector{<:Number}` of length
 `N*length(z[1]) + NS`: the `N` seeds concatenated first, followed by the
 scalar unknowns `z.d` (period and optional shift). Inverse of
 [`fromvector!`](@ref).
 """
 function tovector(z::MVector{X, N, NS}) where {X, N, NS}
     n = length(z[1])
-    out = zeros(N*n + NS)
+    out = zeros(eltype(z[1]), N*n + NS)
     for i = 1:N
-        out[_blockrng(i, n)] .= z[i]
+        out[_blockrng(i, n)] .= vec(z[i])
     end
     out[end - NS + 1 : end] .= z.d
     return out
 end
 
 """
-    fromvector!(out::MVector, v::Vector{<:Real}) -> out
+    fromvector!(out::MVector, v::Vector{<:Number}) -> out
 
 Copy the flat representation `v` (as produced by [`tovector`](@ref)) back
 into the seeds and scalar unknowns of `out`, in place, and return `out`.
 `v` must have length `nsegments(out)*length(out[1]) + NS`.
 """
-function fromvector!(out::MVector{X, N, NS}, v::Vector{<:Real}) where {X, N, NS}
+function fromvector!(out::MVector{X, N, NS}, v::Vector{<:Number}) where {X, N, NS}
     n = length(out[1])
     for i = 1:N
-        out[i] .= view(v, _blockrng(i, n))
+        vec(out[i]) .= view(v, _blockrng(i, n))
     end
     out.d = ntuple(j->v[end-NS+j], NS)
     return out
