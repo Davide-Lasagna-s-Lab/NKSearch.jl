@@ -73,7 +73,7 @@ opts = Options(method=:tr_iterative, maxiter=25,
                                                    # operator
     ϵ::Float64              = 1e-6                 # dt for finite difference approximation
                                                    # of the derivative of the flow operator
-    callback::CB            = (args...) -> false   # user-provided callback function
+    callback::CB            = (args...)->false     # user-provided callback function
     row_order::Symbol       = :ashtari             # row ordering for Newton system
 
     # line search parameters
@@ -85,7 +85,7 @@ opts = Options(method=:tr_iterative, maxiter=25,
     gmres_maxiter::Int      = 10                   # maximum number of GMRES iterations
     gmres_verbose::Bool     = true                 # print GMRES iteration status
     gmres_rtol::Float64     = 1e-3                 # GMRES relative stopping tolerance
-    gmres_callback::GT      = nothing              # GMRES callback function
+    gmres_callback::GT      = (args...)->false     # GMRES callback function
     gmres_start::W          = dz->(dz .*= 0.0; dz) # GMRES warm start based on previous Newton step
 
     # trust_region algorithm parameters

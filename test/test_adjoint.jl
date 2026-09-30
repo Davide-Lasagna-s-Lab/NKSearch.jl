@@ -127,22 +127,6 @@ println("\nAll adjoint identity tests passed.")
 # Spatial shift S(x, s) rotates state x by angle s.
 # Its derivative dS/ds is the infinitesimal generator (-x[2], x[1]).
 
-struct SpatialShift end
-function (::SpatialShift)(x, s)
-    c, sn = cos(s), sin(s)
-    x1, x2 = x[1], x[2]
-    x[1] = c*x1 - sn*x2
-    x[2] = sn*x1 + c*x2
-    return x
-end
-
-struct SpatialShiftDerivative end
-function (::SpatialShiftDerivative)(out, x)
-    out[1] = -x[2]
-    out[2] =  x[1]
-    return out
-end
-
 @testset "Adjoint identity (NS=2, with spatial shift)" begin
     S_op   = SpatialShift()
     dS_op  = SpatialShiftDerivative()

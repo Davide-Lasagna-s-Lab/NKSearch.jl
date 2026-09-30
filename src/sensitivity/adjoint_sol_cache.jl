@@ -3,12 +3,11 @@
 # ----------------------------------------------------------------- #
 import Base.Threads: @sync, @spawn
 import LinearAlgebra: dot
-import Flows
 
 export make_adjoint_problem
 
 # ~~~ Matrix Type ~~~
-struct AdjointProblemLHS{X, N, NS, LST, ST, DT, CT}
+struct AdjointProblemLHS{X, N, NS, ORDERING, LST, ST, DT, CT}
         Ls::LST               # homogeneous adjoint operators (one per thread)
          S::ST                # space shift operator
          D::DT                # time (and space) derivative operator
@@ -18,6 +17,17 @@ struct AdjointProblemLHS{X, N, NS, LST, ST, DT, CT}
        tmp::X                 # temporary storage
          z::MVector{X, N, NS} # the periodic orbit
      store::CT                # store
+
+    AdjointProblemLHS{X, N, NS, ORDERING}(Ls::LST,
+                                           S::ST,
+                                           D::DT,
+                                          x0::X,
+                                          xT::X,
+                                       dxTdT::X,
+                                         tmp::X,
+                                           z::MVector{X, N, NS},
+                                       store::CT) where {X, N, NS, ORDERING, LST, ST, DT, CT} =
+        new{X, N, NS, ORDERING, LST, ST, DT, CT}(Ls, S, D, x0, xT, dxTdT, tmp, z, store)
 end
 
 """
@@ -38,6 +48,8 @@ as `A * w` and usable with GMRES) together with its right-hand side `rhs`.
 - `S`, `D`: spatial-shift operator and the time/space derivative operators,
   as for [`search!`](@ref) (`S` omitted in the no-shift form).
 - `jTJ::Real`: the cost-gradient scalar placed in the bottom rows of `rhs`.
+- `row_order::Symbol`: arrangement of rows used for the linear system, either
+  `:ashtari` or `:regular`.
 
 !!! warning "Experimental"
     The sensitivity interface is still being stabilised; argument
@@ -52,7 +64,9 @@ function make_adjoint_problem(z::MVector{X, N, NS},
                               J,
                               S,
                               D,
-                            jTJ::Real) where {X, N, NS}
+                            jTJ::Real;
+                      row_order::Symbol=:ashtari) where {X, N, NS}
+    row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
 
     # make copies of the propagators, one per segment (see the threading
     # note in newton.jl on why we avoid threadid()-indexed buffers)
@@ -78,31 +92,32 @@ function make_adjoint_problem(z::MVector{X, N, NS},
     rhs = similar(z)
 
     @sync for i = 1:N
+        j = row_order == :ashtari ? i%N + 1 : i
         @spawn begin
             # note that store must be thread safe
             # integration span
             span = (T - (i-1)*T/N, T - i*T/N)
 
             # set homogeneus initial condition
-            rhs[i] .= 0
+            rhs[j] .= 0
 
             # propagate
-            Js[i](rhs[i], store, span)
+            Js[i](rhs[j], store, span)
 
             # flip sign
-            rhs[i] .*= -1.0
+            rhs[j] .*= -1.0
         end
     end
 
     # shift the last state
-    NS == 2 && S(rhs[N], -s)
+    NS == 2 && S(rhs[row_order == :ashtari ? 1 : N], -s)
 
     # set the last bits
     vals = zeros(NS); vals[1] = jTJ
     rhs.d = tuple(vals...)
 
     # construct object
-    return AdjointProblemLHS(Ls, S, D, x0, xT, dxTdT, tmp, z, store), rhs
+    return AdjointProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, dxTdT, tmp, z, store), rhs
 end
 
 # outer constructor without shift
@@ -111,19 +126,23 @@ make_adjoint_problem(z::MVector{X, N, 1},
                      L,
                      J,
                      D,
-                     jTJ) where {X, N} = make_adjoint_problem(z,
-                                                              store,
-                                                              L,
-                                                              J,
-                                                              nothing,
-                                                              D,
-                                                              jTJ)
+                     jTJ;
+             row_order::Symbol=:ashtari) where {X, N} = make_adjoint_problem(z,
+                                                                             store,
+                                                                             L,
+                                                                             J,
+                                                                             nothing,
+                                                                             D,
+                                                                             jTJ;
+                                                                       row_order=row_order)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(A::AdjointProblemLHS{X}, w::MVector{X}) where {X} = mul!(similar(w), A, w)
 
 # Compute mat-vec product (version including one spatial shifts)
-function mul!(out::MVector{X, N, NS}, mm::AdjointProblemLHS{X, N, NS}, w::MVector{X, N, NS}) where {X, N, NS}
+function mul!(out::MVector{X, N, NS},
+               mm::AdjointProblemLHS{X, N, NS, ORDERING},
+                w::MVector{X, N, NS}) where {X, N, NS, ORDERING}
     # aliases
     store = mm.store
     x0    = mm.x0
@@ -139,27 +158,28 @@ function mul!(out::MVector{X, N, NS}, mm::AdjointProblemLHS{X, N, NS}, w::MVecto
 
     # main block
     @sync for i = 1:N
+        j = ORDERING == :ashtari ? i%N + 1 : i
         @spawn begin
             # set adjoint final condition
-            out[i] .= w[i]
+            out[j] .= w[i]
 
             # integration span
             span = (T - (i-1)*T/N, T - i*T/N)
 
             # integrate linearised equations
-            Ls[i](out[i], store, span)
+            Ls[i](out[j], store, span)
 
             # apply shift on last segment
-            NS == 2 && i == N && S(out[i], -s)
+            NS == 2 && i == N && S(out[j], -s)
 
             # this is the identity operator
-            out[i] .-= w[i%N + 1]
+            out[j] .-= w[i%N + 1]
         end
     end
 
     # right columns
-    out[N] .-= NS == 2 ? S(D[1](tmp, x0), -s).*w.d[1] : D[1](tmp, x0).*w.d[1]
-    NS == 2 && (out[N] .-= S(D[2](tmp, x0), -s).*w.d[2])
+    out[ORDERING == :ashtari ? 1 : N] .-= NS == 2 ? S(D[1](tmp, x0), -s).*w.d[1] : D[1](tmp, x0).*w.d[1]
+    NS == 2 && (out[ORDERING == :ashtari ? 1 : N] .-= S(D[2](tmp, x0), -s).*w.d[2])
 
     # bottom rows
     out.d = ntuple(j-> j == 1 ? dot(w[1], dxTdT) : dot(w[1], D[j](tmp, xT)), length(D))

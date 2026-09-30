@@ -3,13 +3,11 @@
 # ----------------------------------------------------------------- #
 import Base.Threads: @sync, @spawn
 import LinearAlgebra: dot
-import GMRES: gmres!
-import Flows
 
-# TODO: move sensitivity analysis to a different package
+# TODO: move sensitivity analysis to a different package?
 
 # ~~~ Matrix Type ~~~
-struct TangentProblemLHS{X, N, NS, LST, ST, DT, CT}
+struct TangentProblemLHS{X, N, NS, ORDERING, LST, ST, DT, CT}
        Ls::LST               # linearised flow operator(s)
         S::ST                # space shift operator
         D::DT                # time (and space) derivative operators
@@ -19,6 +17,17 @@ struct TangentProblemLHS{X, N, NS, LST, ST, DT, CT}
       tmp::X                 # temporary storage
         z::MVector{X, N, NS} # current orbit
     store::CT                # store
+
+    TangentProblemLHS{X, N, NS, ORDERING}(Ls::LST,
+                                           S::ST,
+                                           D::DT,
+                                          x0::X,
+                                          xT::X,
+                                       dxTdT::X,
+                                         tmp::X,
+                                           z::MVector{X, N, NS},
+                                       store::CT) where {X, N, NS, ORDERING, LST, ST, DT, CT} =
+        new{X, N, NS, ORDERING, LST, ST, DT, CT}(Ls, S, D, x0, xT, dxTdT, tmp, z, store)
 end
 
 # Main outer constructor
@@ -27,7 +36,9 @@ function make_tangent_problem(z::MVector{X, N, NS},
                               L,
                               J,
                               S,
-                              D) where {X, N, NS}
+                              D;
+                      row_order::Symbol=:ashtari) where {X, N, NS}
+    row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
 
     # make copies of the propagators, one per segment (see the threading
     # note in newton.jl on why we avoid threadid()-indexed buffers)
@@ -44,8 +55,8 @@ function make_tangent_problem(z::MVector{X, N, NS},
         T,   = z.d
     end
 
-    # get last point on the orbit and obtain its time derivative 
-     x0   =   store(similar(z[1]), 0, Val(0))
+    # get last point on the orbit and obtain its time derivative
+     x0   = store(similar(z[1]), 0, Val(0))
      xT   = NS == 2 ? S(store(similar(z[1]), T, Val(0)), s) : store(similar(z[1]), T, Val(0))
     dxTdT = NS == 2 ? S(store(similar(z[1]), T, Val(1)), s) : store(similar(z[1]), T, Val(1))
 
@@ -53,28 +64,29 @@ function make_tangent_problem(z::MVector{X, N, NS},
     rhs = similar(z)
 
     @sync for i = 1:N
+        j = row_order == :ashtari ? i%N + 1 : i
         @spawn begin
             # note that store must be thread safe
             # integration span
             span = ((i-1)*T/N, i*T/N)
 
             # set homogeneous initial condition
-            rhs[i] .= 0
+            rhs[j] .= 0
 
             # integrate non-homogeneous equations over the i-th span
-            Js[i](rhs[i], store, span)
+            Js[i](rhs[j], store, span)
 
             # flip sign for the right hand side
-            rhs[i] .*= -1.0
+            rhs[j] .*= -1.0
         end
     end
 
     # we need to "back-shift" the last state it if we have a symmetry
-    NS == 2 && S(rhs[N], s)
+    NS == 2 && S(rhs[row_order == :ashtari ? 1 : N], s)
 
     rhs.d = tuple(zeros(NS)...)
 
-    return TangentProblemLHS(Ls, S, D, x0, xT, dxTdT, tmp, z, store), rhs
+    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, dxTdT, tmp, z, store), rhs
 end
 
 # outer constructor without shift
@@ -82,20 +94,22 @@ make_tangent_problem(z::MVector{X, N, 1},
                      store,
                      L,
                      J,
-                     D) where {X, N} = make_tangent_problem(z,
-                                                            store,
-                                                            L,
-                                                            J,
-                                                            nothing,
-                                                            D)
+                     D;
+             row_order::Symbol=:ashtari) where {X, N} = make_tangent_problem(z,
+                                                                             store,
+                                                                             L,
+                                                                             J,
+                                                                             nothing,
+                                                                             D;
+                                                                     row_order=row_order)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(mm::TangentProblemLHS{X}, w::MVector{X}) where {X} = mul!(similar(w), mm, w)
 
 # Compute mat-vec product
 function mul!(out::MVector{X, N, NS},
-              mm::TangentProblemLHS{X, N, NS},
-              w::MVector{X, N, NS}) where {X, N, NS}
+               mm::TangentProblemLHS{X, N, NS, ORDERING},
+                w::MVector{X, N, NS}) where {X, N, NS, ORDERING}
     # aliases
     store = mm.store
     x0    = mm.x0
@@ -111,29 +125,30 @@ function mul!(out::MVector{X, N, NS},
 
     # compute L{x0[i]}⋅w[i] - w[i+1]
     @sync for i = 1:N
+        j = ORDERING == :ashtari ? i%N + 1 : i
         @spawn begin
             # set perturbation initial condition
-            out[i] .= w[i]
+            out[j] .= w[i]
 
             # integration span
             span = ((i-1)*T/N, i*T/N)
 
             # integrate linearised equations
-            Ls[i](out[i], store, span)
+            Ls[i](out[j], store, span)
 
             # apply shift on last segment
-            NS == 2 && i == N && S(out[i], s)
+            NS == 2 && i == N && S(out[j], s)
 
             # this is the identity operators on the upper diagonal
-            out[i] .-= w[i%N + 1]
+            out[j] .-= w[i%N + 1]
         end
     end
 
     # Add time and space derivative of state at end point. Note that
     # if we have a spatial continuous symmetry (NS = 2), these two 
     # derivatives will have been "back-shifted"
-    out[N] .+= dxTdT.*w.d[1]
-    NS == 2 && (out[N] .+= D[2](tmp, xT).*w.d[2])
+    out[ORDERING == :ashtari ? 1 : N] .+= dxTdT.*w.d[1]
+    NS == 2 && (out[ORDERING == :ashtari ? 1 : N] .+= D[2](tmp, xT).*w.d[2])
 
     # Compute phase locking constraints
     out.d = ntuple(j->dot(w[1], D[j](tmp, x0)), length(D))
