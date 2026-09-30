@@ -38,6 +38,7 @@ makedocs(;
         "Concepts"       => "concepts.md",
         "Tutorial"       => "tutorial.md",
         "Solver methods" => "methods.md",
+        "L-BFGS search"  => "lbfgs.md",
         "API reference"  => "api.md",
     ],
 )

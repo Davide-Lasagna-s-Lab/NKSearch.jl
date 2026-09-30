@@ -12,14 +12,14 @@ export StageIterCache, AdjointIterSolCache
 """
     StageIterCache(Gs, Ls, S, D, z0)
 
-Matrix-free cache for Newton-Raphson periodic orbit search using
-pre-computed integration stages (stage caching).
+Stage-cached shooting residual and tangent operator used by the L-BFGS
+search. Forward updates save the trajectory for tangent/adjoint replay.
 
 Arguments (user-provided, one per segment):
   - `Gs`:     nonlinear flows  (TimeStepConstant, NormalMode)
   - `Ls`:     forward linearised flows  (TimeStepFromCache, DiscreteMode{false})
   - `S`:      spatial shift operator (or `nothing`)
-  - `D`:      phase-locking derivative operators
+  - `D`:      vector field and optional spatial-shift generator
   - `z0`:     initial guess
 
 Allocated:
@@ -65,10 +65,10 @@ Base.:*(mm::StageIterCache{X}, δz::MVector{X}) where {X} = mul!(similar(δz), m
 # spatial-shift contributions on the last segment (see code below).
 #
 # Uses DiscreteMode{false} (tangent-linear) with cached stages:
-# computes Dϕ·v, the algebraic transpose of what DiscreteMode{true}
-# (adjoint mode) computes on the same cached stages.
+# computes Dϕ·v; DiscreteMode{true} supplies Dϕ^T·w on those same stages.
 #
-# GMRES solves  J·dz = F(z)  →  z_new = z - dz
+# For the residual defined here, a Newton correction would solve J·dz = -F.
+# The L-BFGS driver instead applies the adjoint to F to form its gradient.
 function mul!(out::MVector{X, N, NS},
                mm::StageIterCache{X, N, NS},
                δz::MVector{X, N, NS}) where {X, N, NS}
@@ -126,7 +126,7 @@ function update!(mm::StageIterCache{X, N, NS},
             xT[i] .= z0[i]
             Flows.reset!(sc[i])
             Gs[i](xT[i], (0, T/N), sc[i])   # xT[i] = φ, fills stage caches
-            D[1](mm.dxTdT[i], xT[i])         # dxTdT[i] = f(φ)  (exact, before shift)
+            D[1](mm.dxTdT[i], xT[i])         # dxTdT[i] = f(φ), the continuous-time endpoint derivative
         end
     end
 
@@ -149,7 +149,7 @@ end
 # =========================================================================== #
 
 """
-    AdjointIterSolCache(Ls_adj, D, S, xT, z0, tmp, stage_caches)
+    AdjointIterSolCache(Ls_adj, D, S, xT, dxTdT, z0, tmp, stage_caches)
 
 Adjoint (transpose) of `StageIterCache`.  Computes `J^T * w` matrix-free.
 
@@ -193,7 +193,8 @@ Base.:*(mm::AdjointIterSolCache{X}, w::MVector{X}) where {X} = mul!(similar(w), 
 # the stage caches populated by the forward `update!`.  The forward
 # mat-vec computes:
 #   (J·δz)_i = -Dϕ_i·δz[i] + δz[i+1] - f(xT[i])·δT/N
-# and the adjoint computes the exact algebraic transpose.
+# and the adjoint transposes that supplied operator. Agreement with a nonlinear
+# finite difference also depends on the period and shift derivative conventions.
 #
 # For relative periodic orbits (NS == 2), the forward applies a
 # spatial shift S on segment N after the tangent propagation:
@@ -245,7 +246,8 @@ function mul!(out::MVector{X, N, NS},
         out_d_2 = dot(w[N], tmp[N])
     end
 
-    # Negate segments (flip -Dϕ^T+I^T → +Dϕ^T-I^T = J_seg^T)
+    # Convert Dϕ^T*w_i - w_(i-1) to w_(i-1) - Dϕ^T*w_i,
+    # matching the residual x_(i+1) - ϕ_i.
     # and negate period row (+f^T/N → -f^T/N = J_per^T).
     @sync for i in 1:N
         @spawn begin

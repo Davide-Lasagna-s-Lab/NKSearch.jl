@@ -42,15 +42,17 @@ orbit, an additional spatial shift `s`.
 # Element type `X`
 `X` must support `LinearAlgebra.dot`, `Base.similar`, `Base.zero`, and full
 broadcasting against other `X` values and scalars. Plain `Vector{Float64}`
-satisfies this, as do the field types in `Flows`.
+satisfies this. Custom state types must implement these operations explicitly.
 
 # Fields
 - `x::NTuple{N,X}`: the seeds.
 - `d::NTuple{NS,Float64}`: the scalar unknowns, `(T,)` or `(T, s)`.
 
-`MVector` is itself an `AbstractVector{Float64}` of length `N*length(x₁) + NS`,
-so it can be passed to linear-algebra routines; use [`tovector`](@ref) /
-[`fromvector!`](@ref) to convert to and from a flat `Vector{Float64}`.
+`MVector` subtypes `AbstractVector{Float64}` and reports length
+`N*length(x₁) + NS`, but `z[i]` returns seed `i`, not scalar entry `i`.
+Use the supported block arithmetic or [`tovector`](@ref) / [`fromvector!`](@ref)
+for ordinary scalar-indexed linear algebra. Flattening requires array-like
+seeds supporting `vec`. Constructors retain the supplied seed arrays.
 
 # Examples
 ```jldoctest
@@ -141,7 +143,7 @@ function fromvector!(out::MVector{X, N, NS}, v::Vector{<:Number}) where {X, N, N
     return out
 end
 
-# a hack really!
+# Report the dimension of the flattened unknown, not the number of seeds.
 Base.size(z::MVector{X, N, NS}) where {X, N, NS} = (NS + N*length(z.x[1]), )
 
 # getters
@@ -208,7 +210,7 @@ function find_number_of_segments(M::Int, T::Real, Tmin::Real, Tmax::Real)
     return 0
 end
 
-# a hack
+# Inspect wrapped array storage for the HDF5 representation.
 _is_complex_eltype(z::MVector) = eltype(parent(z[1])) <: Complex
 
 """
@@ -252,9 +254,10 @@ end
 
 Read an orbit written by [`save_seeds`](@ref) from the HDF5 file `path`.
 
-`fun` is applied to each raw seed array as it is read, so it can wrap the
-plain array back into the state type you use (pass `identity` to keep plain
-arrays). Returns the reconstructed [`MVector`](@ref) together with a `Dict`
+For complex datasets, `fun` wraps each reconstructed array. The current
+real-data branch returns raw arrays without applying `fun`; pass `identity`
+when loading ordinary arrays. Despite the name, this allocates a new orbit.
+Returns the reconstructed [`MVector`](@ref) together with a `Dict`
 of any extra attributes that were stored under the `other_` prefix.
 """
 function load_seeds!(fun, path::String)

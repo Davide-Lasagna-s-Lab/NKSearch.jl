@@ -39,3 +39,23 @@ load_seeds!
 ```@docs
 make_adjoint_problem
 ```
+
+## L-BFGS search overloads
+
+```julia
+search!(G, L, L_adj, F, z, Options(method=:lbfgs_opt))
+search!(G, L, L_adj, S, F, dS, z, Options(method=:lbfgs_opt))
+```
+
+These require stage-cached discrete tangent and adjoint flows, not `JFOp`.
+See [L-BFGS search](lbfgs.md) for their contracts and callback signature.
+
+### Stage-cache internals
+
+These types are implementation tools; the public search driver constructs them.
+
+```@docs
+StageIterCache
+AdjointIterSolCache
+OptLBFGSCache
+```

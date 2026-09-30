@@ -21,8 +21,8 @@ Multiple shooting splits the orbit into ``N`` **segments** and stores one
 over a fraction ``T/N`` of the period, and the unknowns are tied together by
 matching conditions: the end of segment ``i`` must equal the start of segment
 ``i+1`` (with the last segment wrapping back to the first, up to a shift for a
-relative periodic orbit). Shorter segments mean shorter integrations and a
-better-conditioned linear system.
+relative periodic orbit). Shorter segments reduce sensitivity growth within each integration and can
+improve conditioning, at the cost of more unknowns and caches.
 
 ## The `MVector` unknown
 
@@ -35,9 +35,12 @@ z = MVector((x1, x2, x3), T, s)     # relative periodic orbit: 3 seeds + period 
 ```
 
 The seeds may be plain `Vector`s or any state type that supports `dot`,
-`similar`, `zero`, and broadcasting (for example the field types in `Flows`).
-`MVector` behaves as an `AbstractVector{Float64}`, and [`tovector`](@ref) /
-[`fromvector!`](@ref) convert to and from a flat `Vector{Float64}` when needed.
+`similar`, `zero`, and broadcasting for the chosen real state representation.
+Although `MVector` subtypes `AbstractVector{Float64}`, its indexing is
+block-based: `z[i]` returns seed `i`, not scalar coordinate `i`. Its reported
+length counts scalar coordinates. Use [`tovector`](@ref) / [`fromvector!`](@ref)
+when an algorithm expects ordinary scalar indexing; do not iterate `eachindex(z)`
+to visit the seeds. Flattening also requires `vec` and array-like seed storage.
 
 ```jldoctest
 julia> z = MVector(([1.0, 2.0], [3.0, 4.0]), 6.28);
@@ -71,12 +74,16 @@ singular, so they are removed by **phase-locking constraints**:
   generator — the `dS` argument, with the convention `dS(out, x)`.
 
 You do not implement the constraints themselves; you only provide `F` (and `dS`),
-and NKSearch builds the constraints from them.
+and the Newton operators build constraints on the correction from them.
+The L-BFGS objective does not include an absolute phase penalty; see
+[L-BFGS search](lbfgs.md). Continuous spatial symmetries may also produce
+neutral directions for ordinary periodic orbits.
 
 ## The operators you provide
 
-[`search!`](@ref) is matrix-free: instead of a Jacobian, you pass operators that
-*act* on states.
+For the Newton methods, you supply operators that act on states. Iterative
+methods apply them matrix-free; direct methods assemble their action on basis
+vectors. L-BFGS uses a separate stage-cache interface described in its guide.
 
 | Operator | Role | Call signature |
 |----------|------|----------------|
@@ -85,6 +92,12 @@ and NKSearch builds the constraints from them.
 | `F` | ODE right-hand side | `F(out, x)` writes the time derivative |
 | `S` | spatial shift (RPO only) | `S(x, s)` shifts `x` by `s` |
 | `dS` | shift generator (RPO only) | `dS(out, x)` writes the spatial phase direction |
+
+Newton period differences also call `G(x, span, monitor)` with a
+`Flows.StoreNFromLast` monitor and restart from its saved state. That state
+must include everything needed to restart the numerical method, including
+auxiliary variables. All shooting segments integrate from local time zero;
+these interfaces assume autonomous dynamics.
 
 `G` and `L` typically come from `Flows` (`flow(...)` and `flow(couple(...))`).
 If you do not have a hand-coded linearisation `L`, wrap `G` in a [`JFOp`](@ref),
@@ -109,12 +122,12 @@ L = JFOp(G, similar_state)   # matrix-free, finite-difference linearisation
   side is `f(t, x, dxdt)` (the `Flows` convention), wrap it:
   `(out, x) -> f(0, x, out)`.
 - **Threads vs. method.** The `_iterative` methods parallelise the segments
-  across tasks and are intended to run with one thread per segment; the
+  across tasks, with independent caches per segment; the
   `_direct` methods must run single-threaded (they will error otherwise). See
   [Solver methods](@ref).
 - **Guess too far from a real orbit.** Newton converges locally. Start from a
   reasonable guess (e.g. a recurrence detected in a long trajectory) and prefer
   a trust-region method far from the solution.
-- **Period sign.** A line/trust step can momentarily drive `T` negative; the
-  solvers guard against the resulting invalid time spans, but a guess with a
-  realistic period helps avoid wasted iterations.
+- **Period sign.** A line/trust step can momentarily drive `T` negative; invalid spans can terminate a search depending on the method and how
+  exceptions are wrapped by tasks. Start with a positive, realistic period;
+  the search does not impose a positive-period parameterisation.

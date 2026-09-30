@@ -27,7 +27,7 @@ end
 struct DirectSolCache{GST, LST, ST, DT, YST, TMPST, MONST}
       Gs::GST               # flow operator with no shifts
       Ls::LST               # linearised flow operator with no shifts
-       S::ST                # space shift operator (can be NoShift)
+       S::ST                # space shift operator (nothing for ordinary periodic orbits)
        D::DT                # time (and space) derivative operator
        A::SparseMatrixCSC{Float64, Int}
       Ys::YST               # temporaries

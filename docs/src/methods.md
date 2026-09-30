@@ -1,21 +1,22 @@
 # Solver methods
 
-[`search!`](@ref) supports four methods, selected with `Options(method = …)`.
-They differ in two independent choices: how the Newton step is **globalized**
+[`search!`](@ref) supports four Newton methods and an L-BFGS method, selected with `Options(method = …)`.
+The Newton methods differ in two independent choices: how the Newton step is **globalized**
 (line search vs. trust region) and how the linear system is **solved** (direct
 LU factorisation vs. matrix-free GMRES).
 
 | `method` | Globalization | Linear solve | Threads |
 |----------|---------------|--------------|---------|
 | `:ls_direct` (default) | line search | LU factorisation | single |
-| `:ls_iterative` | line search | GMRES (matrix-free) | one per segment |
+| `:ls_iterative` | line search | GMRES (matrix-free) | segment tasks |
 | `:tr_direct` | trust region (dogleg) | LU factorisation | single |
-| `:tr_iterative` | trust region (hookstep) | GMRES (matrix-free) | one per segment |
+| `:tr_iterative` | trust region (hookstep) | GMRES (matrix-free) | segment tasks |
+| `:lbfgs_opt` | objective backtracking | none; adjoint gradient | segment tasks |
 
 ## Choosing a linear solve
 
 - **Direct (`_direct`).** The Jacobian is assembled and LU-factorised. This is
-  simplest and exact, but forming the matrix costs `O(n)` flow linearisations
+  a direct solve of the assembled numerical linearisation, but forming the matrix costs `O(n)` flow linearisations
   per segment (where `n` is the state size), so it is only practical for small
   states. Direct methods run **single-threaded** and will raise an error if
   Julia is started with more than one thread.
@@ -23,7 +24,8 @@ LU factorisation vs. matrix-free GMRES).
 - **Iterative (`_iterative`).** The Jacobian is never formed; GMRES uses only
   matrix–vector products, each one a linearised flow. This scales to large
   states (discretised PDEs) and parallelises the shooting segments across tasks.
-  Run Julia with as many threads as segments. Tune the solve with
+  Each segment owns its caches; the number of threads need not match the
+  number of segments. Tune the solve with
   `gmres_maxiter` and `gmres_rtol`.
 
 ## Choosing a globalization
@@ -47,11 +49,35 @@ LU factorisation vs. matrix-free GMRES).
 
 ## Convergence and return value
 
-A search stops when the residual norm drops below `e_norm_tol`, when the step
-norm drops below `dz_norm_tol`, when the trust-region step falls below
-`min_step`, when a `callback` returns `true`, or when `maxiter` is reached. The
-trust-region and hookstep methods return a status `Symbol` (`:converged`,
-`:maxiter_reached`, `:min_step_reached`, `:callback_satisfied`); the line-search
-method returns `nothing`. In all cases the orbit `z` is refined in place.
+| Method | Return value | Callback |
+|---|---|---|
+| `:ls_direct`, `:ls_iterative` | `nothing` | not called |
+| `:tr_direct` | status symbol | not called |
+| `:tr_iterative` | status symbol | eight arguments; `true` stops |
+| `:lbfgs_opt` | status symbol | seven arguments; return value ignored |
 
-See [`Options`](@ref) for the full list of tunable parameters.
+Trust-region Newton drivers return `:converged` for either a small residual
+or a small correction. Thus this status alone does not certify orbit closure.
+They can also return `:maxiter_reached` or `:min_step_reached`; hookstep adds
+`:callback_satisfied`. L-BFGS returns `:converged` only for its residual test,
+and labels a small update `:min_step_reached`.
+
+Always reintegrate the final seeds and check the matching residuals. The
+`e_norm_type` option currently affects L-BFGS reporting/stopping only; the
+Newton drivers use the Euclidean residual. See [`Options`](@ref) for the
+actual callback signatures and the information available at each call.
+
+## L-BFGS optimisation
+
+`:lbfgs_opt` minimises the shooting mismatch with an adjoint gradient and a
+limited-memory quasi-Newton direction. There is no inner linear solve;
+`gmres_*` and `tr_*` options do not control this method. Use the adjoint
+overload `search!(G, L, L_adj, F, z, opts)`.
+
+Its callback has seven arguments and its return value is ignored. The method
+returns `:converged`, `:min_step_reached` or `:maxiter_reached`; it does not
+return `:callback_satisfied`. The objective uses the Euclidean `MVector` norm,
+while `e_norm_type` selects the reported/stopping residual norm.
+
+Read [L-BFGS search](lbfgs.md) before selecting it: the current backtracking
+fallback does not guarantee descent when every trial is rejected.

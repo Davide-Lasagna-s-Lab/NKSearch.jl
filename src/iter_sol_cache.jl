@@ -62,7 +62,7 @@ function mul!(out::MVector{X, N, NS},
     dxTdT = mm.dxTdT
     T     = mm.z0.d[1]
 
-    # comput L{x0[i]}-δz[i] - δz[i+1]
+    # Apply DΦ_i to the seed correction, then subtract the next seed correction.
     @sync for i in 1:N
         j = ORDERING == :ashtari ? i%N + 1 : i
         @spawn begin
@@ -78,7 +78,7 @@ function mul!(out::MVector{X, N, NS},
             # apply shift on last segment (if we have one)
             NS == 2 && i == N && S(out[j], z0.d[2])
 
-            # this is the identity operators on the upper diagonal
+            # The negative identity couples this endpoint to the next shooting seed.
             out[j] .-= δz[i%N + 1]
         end
     end
@@ -148,7 +148,7 @@ function update!(mm::IterSolCache{X, N, NS, ORDERING},
         b[j] .= z0[i%N+1] .- xT[i]
     end
 
-    # reset shifts
+    # Phase right-hand sides are zero: constrain the correction, not an absolute phase.
     b.d = zero.(b.d)
 
     return nothing

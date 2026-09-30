@@ -8,6 +8,13 @@ export OptLBFGSCache
 
 # ~~~ L-BFGS Optimization Cache ~~~
 # Minimises the scalar objective ϕ(z) = 0.5 * ||F(z)||^2
+"""
+    OptLBFGSCache(z, opts)
+
+Allocate the limited-memory correction history and work vectors for an L-BFGS
+search with the shape of `z`. `opts.lbfgs_memory` must be positive. Normally
+constructed internally by `search!`, not needed to use the public interface.
+"""
 mutable struct OptLBFGSCache{X, N, NS}
     s_history::Vector{MVector{X, N, NS}}  # step vectors s_k = z_{k+1} - z_k
     y_history::Vector{MVector{X, N, NS}}  # gradient change y_k = ∇ϕ_{k+1} - ∇ϕ_k
@@ -54,8 +61,9 @@ end
 
 Compute the residual `Fz = F(z)` and the gradient `∇ϕ = J(z)^T F(z)`.
 
-Populates the forward cache's stage caches via `update!`, then applies
-the adjoint operator to `Fz` to obtain the gradient of `ϕ(z) = ½‖F(z)‖²`.
+Populate the trajectory caches, then apply the adjoint operator to the
+residual. If closure is already below tolerance, return without updating
+`∇ϕ`; its previous contents must not be interpreted as the current gradient.
 """
 function compute_gradient!(∇ϕ::MVector{X, N, NS},
                            Fz::MVector{X, N, NS},
@@ -71,14 +79,15 @@ function compute_gradient!(∇ϕ::MVector{X, N, NS},
         return ∇ϕ, Fz
     end
 
-    # 2. Compute ∇ϕ = J^T * F(z) using exact algebraic transpose.
+    # 2. Apply the supplied shooting adjoint to the residual.
     mul!(∇ϕ, adj_cache, Fz)
     
     return ∇ϕ, Fz
 end
 
 # ~~~ L-BFGS two-loop recursion ~~~
-# Computes dz = -H_k * ∇ϕ ≈ -(J^T J)^{-1} ∇ϕ
+# Computes dz = -H_k * ∇ϕ using a limited-memory inverse-Hessian model.
+# This is a quasi-Newton update, not an explicitly formed Gauss-Newton solve.
 # Iterates the circular buffer in *chronological* order (via last_idx),
 # not in linear index order, to handle buffer wrapping correctly.
 function lbfgs_two_loop_recursion!(dz::MVector{X, N, NS},
@@ -163,7 +172,8 @@ function update_lbfgs_opt_history!(cache::OptLBFGSCache,
 end
 
 function _e_norm_opt(fwd_cache, z::MVector{X, N, NS}, dz::MVector{X, N, NS}, λ::Real, Fz::MVector{X, N, NS}, opts) where {X, N, NS}
-    # Evaluate F(z + λ*dz) without updating the base state representations
+    # Temporarily mutate z to evaluate the trial residual and its stage caches.
+    # Normal completion restores z; an exception currently bypasses restoration.
     z .+= λ .* dz
     update!(fwd_cache, Fz, z)
     val = norm(Fz)^2
@@ -193,7 +203,9 @@ Backtracking line search on the objective ϕ(z) = ½‖F(z)‖².
 
 Starting from λ = 1, evaluates ϕ(z + λ·dz) and accepts the first step
 that reduces ϕ.  Reduces λ by `opts.ls_rho` on each rejection.
-Returns `(λ, ϕ(z + λ·dz))`.
+Returns `(λ, ‖F(z + λ·dz)‖²)` on acceptance (without the factor one-half).
+If every trial fails, returns `(1.0, ‖F(z)‖²)`; the caller then takes a full
+step, so the fallback does not guarantee decrease.
 """
 function linesearch_opt_lbfgs(fwd_cache, z, dz, Fz, opts)
     ok_0, val_0 = safe_e_norm_opt(fwd_cache, z, dz, 0.0, Fz, opts)
