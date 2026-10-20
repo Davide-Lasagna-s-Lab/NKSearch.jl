@@ -3,7 +3,7 @@
 # ----------------------------------------------------------------- #
 import Base.Threads: @sync, @spawn
 import LinearAlgebra: dot
-import GMRES: gmres!
+import GMRES: gmres!, hookstep!
 import Flows
 
 # ~~~ Matrix Type ~~~
