@@ -9,7 +9,7 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
 
     # allocate memory
     b    = similar(z)                             # right hand side
-    dz   = similar(z); dz .*= 0.0                 # temporary
+    dz   = zero(z)                                # temporary
     tmps = ntuple(i->similar(z[1]), nsegments(z)) # one temporary for each segment
 
     # calculate initial error
