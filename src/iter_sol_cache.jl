@@ -90,7 +90,7 @@ function mul!(out::MVector{X, N, NS},
     end
 
     # shift derivative (if present) goes only on last element
-    NS == 2 && (out[ORDERING == :ashtrari ? 1 : N] .+= D[2](tmp[1], xT[N]).*δz.d[2])
+    NS == 2 && (out[ORDERING == :ashtari ? 1 : N] .+= D[2](tmp[1], xT[N]).*δz.d[2])
 
     # add phase locking constraints
     out.d = ntuple(j->dot(δz[1], D[j](tmp[1], z0[1])), NS)
