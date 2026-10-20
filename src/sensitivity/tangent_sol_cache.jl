@@ -14,18 +14,17 @@ struct TangentProblemLHS{X, N, NS, ORDERING, LST, ST, DT}
         S::ST                # space shift operator
         D::DT                # time (and space) derivative operators
        x0::X                 # initial conditions
-       xT::X                 # final conditions
+       xT::X                 # final conditions shifted back, S(u(T), s), which is u(0) on a converged orbit
       tmp::X                 # temporary storage
         z::MVector{X, N, NS} # current orbit
-        dxTdT::X
 
     TangentProblemLHS{X, N, NS, ORDERING}(Ls::LST,
                                            S::ST,
                                            D::DT,
                                           x0::X,
                                           xT::X,
-                                           z::MVector{X, N, NS}, dxTdT::X) where {X, N, NS, ORDERING, LST, ST, DT} =
-        new{X, N, NS, ORDERING, LST, ST, DT}(Ls, S, D, x0, xT, similar(z[1]), z, dxTdT)
+                                           z::MVector{X, N, NS}) where {X, N, NS, ORDERING, LST, ST, DT} =
+        new{X, N, NS, ORDERING, LST, ST, DT}(Ls, S, D, x0, xT, similar(z[1]), z)
 end
 
 function _make_tangent_rhs!(rhs::MVector{X, N, NS}, Js, S, s, row_order) where {X, N, NS}
@@ -52,7 +51,10 @@ function _make_tangent_rhs!(rhs::MVector{X, N, NS}, Js, S, s, row_order) where {
     return rhs
 end
 
-# Main outer constructor
+# Main outer constructor. For a relative periodic orbit the store must not be built with a `period`: its
+# wrap-around assumes u(t + T) = u(t), whereas u(0) = S(u(T), s), so that the base flow near t = 0 and t = T would
+# mix the two frames. Fill it segment by segment with `storelast=false` and push the end point u(T), or use the
+# stage caches.
 function make_tangent_problem(z::MVector{X, N, NS},
                           store::Flows.RAMStorage,
                               L,
@@ -75,17 +77,15 @@ function make_tangent_problem(z::MVector{X, N, NS},
         (out) -> Ji(out, store, ((i - 1)*T/N, i*T/N - 1e-12))
     end, N)
 
-    # get last point on the orbit and obtain its time derivative
+    # the first point of the orbit, and its last point shifted back, S(u(T), s), which on a converged orbit is the
+    # first point itself (no value of the store at T is needed)
     x0 = store(similar(z[1]), 0, Val(0))
-    xT = NS > 1 ? S(store(similar(z[1]), T, Val(0)), s) : store(similar(z[1]), T, Val(0))
-
-    # ! this evaluation increases accuracy in tangent problem
-    dxTdT = NS > 1 ? S(store(similar(z[1]), T, Val(1)), s) : store(similar(z[1]), T, Val(1))
+    xT = copy(x0)
 
     # right-hand side
     rhs = _make_tangent_rhs!(similar(z), Js, S, s, row_order)
 
-    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, z, dxTdT), rhs
+    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, z), rhs
 end
 
 function make_tangent_problem(z::MVector{X, N, NS},
@@ -109,14 +109,15 @@ function make_tangent_problem(z::MVector{X, N, NS},
         (out) -> Ji(out, cache[i])
     end, N)
 
-    # get last point on the orbit and obtain its time derivative
+    # the first point of the orbit, and its last point shifted back, S(u(T), s), which on a converged orbit is the
+    # first point itself
     x0 = copy(cache[1].xs[1][1])
-    xT = NS > 1 ? S(copy(cache[1].xs[1][1]), s) : copy(cache[1].xs[1][1])
+    xT = copy(x0)
 
     # right-hand side
     rhs = _make_tangent_rhs!(similar(z), Js, S, s, row_order)
 
-    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, z, zero(x0)), rhs
+    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, z), rhs
 end
 
 # outer constructor without shift
@@ -167,11 +168,8 @@ function LinearAlgebra.mul!(out::MVector{X, N, NS},
         end
     end
 
-    # Add time and space derivative of state at end point. Note that
-    # if we have a spatial continuous symmetry (NS = 2), these two 
-    # derivatives will have been "back-shifted"
-    # out[ORDERING == :ashtari ? 1 : N] .+= mm.dxTdT.*w.d[1]
-    # for i in 2:length(D)
+    # Add the time and space derivatives at the end point shifted back,
+    # S(u(T), s) = u(0): the columns of the period and of the shifts
     for i in eachindex(D)
         out[ORDERING == :ashtari ? 1 : N] .+= D[i](tmp, xT).*w.d[i]
     end

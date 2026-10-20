@@ -10,7 +10,7 @@ struct AdjointProblemLHS{X, N, NS, ORDERING, LST, ST, DT}
          S::ST                # space shift operator
          D::DT                # time (and space) derivative operator
         x0::X                 # initial point
-        xT::X                 # final point
+        xT::X                 # final point, u(T) = S(u(0), -s) on a converged orbit
        tmp::X                 # temporary storage
          z::MVector{X, N, NS} # the periodic orbit
 
@@ -63,7 +63,10 @@ as `A * w` and usable with GMRES) together with its right-hand side `rhs`.
 - `z::MVector`: a *converged* orbit (see [`search!`](@ref)).
 - `store`: a thread-safe trajectory cache that returns the orbit state and
   its time derivative at a requested time, callable as `store(out, t, Val(k))`
-  for derivative order `k`.
+  for derivative order `k`, or a tuple of one `RAMStageCache` per segment. For
+  a relative periodic orbit a `RAMStorage` must not be built with a `period`:
+  its wrap-around assumes u(t + T) = u(t), whereas u(0) = S(u(T), s). Fill it
+  segment by segment with `storelast=false` and push the end point u(T).
 - `L`: homogeneous adjoint flow operator.
 - `J`: inhomogeneous (forcing) adjoint operator.
 - `S`, `D`: spatial-shift operator and the time/space derivative operators,
@@ -102,9 +105,10 @@ function make_adjoint_problem(z::MVector{X, N, NS},
         (out) -> Ji(out, store, (T - (i - 1)*T/N - 1e-12, T - i*T/N))
     end, N)
 
-    # various points on the orbit
-     x0   =  store(similar(z[1]), 0, Val(0))
-     xT   =  store(similar(z[1]), T, Val(0))
+    # the first point of the orbit, and its last point, u(T) = S(u(0), -s) on a converged orbit (no value of the
+    # store at T is needed)
+    x0 = store(similar(z[1]), 0, Val(0))
+    xT = NS > 1 ? S(copy(x0), .-s) : copy(x0)
 
     # right-hand side
     rhs = _make_adjoint_rhs(Js, S, s, z, jTJ, row_order)
@@ -134,9 +138,9 @@ function make_adjoint_problem(z::MVector{X, N, NS},
         (out) -> Ji(out, store[N - i + 1])
     end, N)
 
-    # various points on the orbit
+    # the first point of the orbit, and its last point, u(T) = S(u(0), -s) on a converged orbit
     x0 = copy(store[1].xs[1][1])
-    xT = copy(store[1].xs[1][1])
+    xT = NS > 1 ? S(copy(x0), .-s) : copy(x0)
 
     # right-hand side
     rhs = _make_adjoint_rhs(Js, S, s, z, jTJ, row_order)
