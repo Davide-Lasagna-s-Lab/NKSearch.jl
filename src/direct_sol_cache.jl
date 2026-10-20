@@ -3,7 +3,6 @@
 # ----------------------------------------------------------------- #
 import Base.Threads: @sync, @spawn
 import SparseArrays: spzeros, SparseMatrixCSC, diagind
-import LinearAlgebra: lu, ldiv!
 import Flows: couple
 
 
@@ -162,4 +161,4 @@ end
 
 # solution for direct method
 _solve(dz::MVector, dsm::DirectSolCache, b::MVector, opts::Options) =
-    (fromvector!(dz, ldiv!(lu(dsm.A), tovector(b))), 0.0)
+    (fromvector!(dz, LinearAlgebra.ldiv!(LinearAlgebra.lu(dsm.A), tovector(b))), 0.0)

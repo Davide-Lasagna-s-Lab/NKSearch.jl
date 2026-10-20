@@ -1,80 +1,43 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-import Base.Threads: @sync, @spawn
-import LinearAlgebra: dot
 
-# TODO: move sensitivity analysis to a different package?
+# ! commit message:
+# !  1. sensitivity code now accepts both RAMStorage and RAMStageCache
+# !  2. subtracted offset when using RAMStorage to avoid timespan error from floating point arithmetic
+# !  3. cleaned up imports and exports
+# !  4. generalised code to accept arbitrary number of continuous shifts
 
 # ~~~ Matrix Type ~~~
-struct TangentProblemLHS{X, N, NS, ORDERING, LST, ST, DT, CT}
+struct TangentProblemLHS{X, N, NS, ORDERING, LST, ST, DT}
        Ls::LST               # linearised flow operator(s)
         S::ST                # space shift operator
         D::DT                # time (and space) derivative operators
        x0::X                 # initial conditions
        xT::X                 # final conditions
-    dxTdT::X                 # time derivative of final point
       tmp::X                 # temporary storage
         z::MVector{X, N, NS} # current orbit
-    store::CT                # store
+        dxTdT::X
 
     TangentProblemLHS{X, N, NS, ORDERING}(Ls::LST,
                                            S::ST,
                                            D::DT,
                                           x0::X,
                                           xT::X,
-                                       dxTdT::X,
-                                         tmp::X,
-                                           z::MVector{X, N, NS},
-                                       store::CT) where {X, N, NS, ORDERING, LST, ST, DT, CT} =
-        new{X, N, NS, ORDERING, LST, ST, DT, CT}(Ls, S, D, x0, xT, dxTdT, tmp, z, store)
+                                           z::MVector{X, N, NS}, dxTdT::X) where {X, N, NS, ORDERING, LST, ST, DT} =
+        new{X, N, NS, ORDERING, LST, ST, DT}(Ls, S, D, x0, xT, similar(z[1]), z, dxTdT)
 end
 
-# Main outer constructor
-function make_tangent_problem(z::MVector{X, N, NS},
-                              store,
-                              L,
-                              J,
-                              S,
-                              D;
-                      row_order::Symbol=:ashtari) where {X, N, NS}
-    row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
-
-    # make copies of the propagators, one per segment (see the threading
-    # note in newton.jl on why we avoid threadid()-indexed buffers)
-    Ls = ntuple(i->deepcopy(L), N)
-    Js = ntuple(i->deepcopy(J), N)
-
-    # temporary
-    tmp = similar(z[1])
-
-    # period and shift
-    if NS == 2
-        T, s = z.d
-    else
-        T,   = z.d
-    end
-
-    # get last point on the orbit and obtain its time derivative
-     x0   = store(similar(z[1]), 0, Val(0))
-     xT   = NS == 2 ? S(store(similar(z[1]), T, Val(0)), s) : store(similar(z[1]), T, Val(0))
-    dxTdT = NS == 2 ? S(store(similar(z[1]), T, Val(1)), s) : store(similar(z[1]), T, Val(1))
-
-    # right hand side
-    rhs = similar(z)
-
+function _make_tangent_rhs!(rhs::MVector{X, N, NS}, Js, S, s, row_order) where {X, N, NS}
+    # compute inhomogeneous evolution for rhs
     @sync for i = 1:N
         j = row_order == :ashtari ? i%N + 1 : i
         @spawn begin
-            # note that store must be thread safe
-            # integration span
-            span = ((i-1)*T/N, i*T/N)
-
             # set homogeneous initial condition
             rhs[j] .= 0
 
             # integrate non-homogeneous equations over the i-th span
-            Js[i](rhs[j], store, span)
+            Js[i](rhs[j])
 
             # flip sign for the right hand side
             rhs[j] .*= -1.0
@@ -82,11 +45,78 @@ function make_tangent_problem(z::MVector{X, N, NS},
     end
 
     # we need to "back-shift" the last state it if we have a symmetry
-    NS == 2 && S(rhs[row_order == :ashtari ? 1 : N], s)
+    NS > 1 && S(rhs[row_order == :ashtari ? 1 : N], s)
 
     rhs.d = tuple(zeros(NS)...)
 
-    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, dxTdT, tmp, z, store), rhs
+    return rhs
+end
+
+# Main outer constructor
+function make_tangent_problem(z::MVector{X, N, NS},
+                          store::Flows.RAMStorage,
+                              L,
+                              J,
+                              S,
+                              D;
+                      row_order::Symbol=:ashtari) where {X, N, NS}
+    row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
+
+    # period and shift
+    T = z.d[1]
+    s = NS > 1 ? Base.tail(z.d) : ()
+
+    # make copies of the propagators, one per segment (see the threading
+    # note in newton.jl on why we avoid threadid()-indexed buffers)
+    Ls = ntuple(i -> let Li = deepcopy(L)
+        (out) -> Li(out, store, ((i - 1)*T/N, i*T/N - 1e-12)) # subtract small amount to avoid timespan error resulting from floating point arithmetic
+    end, N)
+    Js = ntuple(i -> let Ji = deepcopy(J)
+        (out) -> Ji(out, store, ((i - 1)*T/N, i*T/N - 1e-12))
+    end, N)
+
+    # get last point on the orbit and obtain its time derivative
+    x0 = store(similar(z[1]), 0, Val(0))
+    xT = NS > 1 ? S(store(similar(z[1]), T, Val(0)), s) : store(similar(z[1]), T, Val(0))
+
+    # ! this evaluation increases accuracy in tangent problem
+    dxTdT = NS > 1 ? S(store(similar(z[1]), T, Val(1)), s) : store(similar(z[1]), T, Val(1))
+
+    # right-hand side
+    rhs = _make_tangent_rhs!(similar(z), Js, S, s, row_order)
+
+    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, z, dxTdT), rhs
+end
+
+function make_tangent_problem(z::MVector{X, N, NS},
+                          cache::NTuple{N, Flows.RAMStageCache},
+                              L,
+                              J,
+                              S,
+                              D;
+                      row_order::Symbol=:ashtari) where {X, N, NS}
+    row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
+
+    # shift
+    s = NS > 1 ? Base.tail(z.d) : ()
+
+    # make copies of the propagators, one per segment (see the threading
+    # note in newton.jl on why we avoid threadid()-indexed buffers)
+    Ls = ntuple(i -> let Li = deepcopy(L)
+        (out) -> Li(out, cache[i])
+    end, N)
+    Js = ntuple(i -> let Ji = deepcopy(J)
+        (out) -> Ji(out, cache[i])
+    end, N)
+
+    # get last point on the orbit and obtain its time derivative
+    x0 = copy(cache[1].xs[1][1])
+    xT = NS > 1 ? S(copy(cache[1].xs[1][1]), s) : copy(cache[1].xs[1][1])
+
+    # right-hand side
+    rhs = _make_tangent_rhs!(similar(z), Js, S, s, row_order)
+
+    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, z, zero(x0)), rhs
 end
 
 # outer constructor without shift
@@ -107,21 +137,17 @@ make_tangent_problem(z::MVector{X, N, 1},
 Base.:*(mm::TangentProblemLHS{X}, w::MVector{X}) where {X} = mul!(similar(w), mm, w)
 
 # Compute mat-vec product
-function mul!(out::MVector{X, N, NS},
-               mm::TangentProblemLHS{X, N, NS, ORDERING},
-                w::MVector{X, N, NS}) where {X, N, NS, ORDERING}
+function LinearAlgebra.mul!(out::MVector{X, N, NS},
+                             mm::TangentProblemLHS{X, N, NS, ORDERING},
+                              w::MVector{X, N, NS}) where {X, N, NS, ORDERING}
     # aliases
-    store = mm.store
     x0    = mm.x0
     xT    = mm.xT
-    dxTdT = mm.dxTdT
     Ls    = mm.Ls
     D     = mm.D
     S     = mm.S
-    z     = mm.z
     tmp   = mm.tmp
-    T     = mm.z.d[1]
-    s     = NS == 2 ? mm.z.d[2] : 0.0
+    NS > 1 && (s = Base.tail(mm.z.d))
 
     # compute L{x0[i]}⋅w[i] - w[i+1]
     @sync for i = 1:N
@@ -130,14 +156,11 @@ function mul!(out::MVector{X, N, NS},
             # set perturbation initial condition
             out[j] .= w[i]
 
-            # integration span
-            span = ((i-1)*T/N, i*T/N)
-
             # integrate linearised equations
-            Ls[i](out[j], store, span)
+            Ls[i](out[j])
 
             # apply shift on last segment
-            NS == 2 && i == N && S(out[j], s)
+            NS > 1 && i == N && S(out[j], s)
 
             # this is the identity operators on the upper diagonal
             out[j] .-= w[i%N + 1]
@@ -147,11 +170,14 @@ function mul!(out::MVector{X, N, NS},
     # Add time and space derivative of state at end point. Note that
     # if we have a spatial continuous symmetry (NS = 2), these two 
     # derivatives will have been "back-shifted"
-    out[ORDERING == :ashtari ? 1 : N] .+= dxTdT.*w.d[1]
-    NS == 2 && (out[ORDERING == :ashtari ? 1 : N] .+= D[2](tmp, xT).*w.d[2])
+    # out[ORDERING == :ashtari ? 1 : N] .+= mm.dxTdT.*w.d[1]
+    # for i in 2:length(D)
+    for i in eachindex(D)
+        out[ORDERING == :ashtari ? 1 : N] .+= D[i](tmp, xT).*w.d[i]
+    end
 
     # Compute phase locking constraints
-    out.d = ntuple(j->dot(w[1], D[j](tmp, x0)), length(D))
+    out.d = ntuple(i -> dot(w[1], D[i](tmp, x0)), length(D))
 
     return out
 end

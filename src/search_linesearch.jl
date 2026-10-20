@@ -2,8 +2,6 @@
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
 import Base.Threads: @sync, @spawn, atomic_add!, Atomic
-import LinearAlgebra: norm
-import Flows
 
 # line search method implementation
 function _search_linesearch!(G, L, S, D, z0, A, opts)

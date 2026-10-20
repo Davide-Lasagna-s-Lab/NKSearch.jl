@@ -4,6 +4,14 @@
 
 module NKSearch
 
+import Base.Threads: @sync, @spawn
+
+using LinearAlgebra,
+      Parameters,
+      Printf
+
+import Flows
+
 # UTILS
 
 # global row indices of the i-th nxn block (one-based)

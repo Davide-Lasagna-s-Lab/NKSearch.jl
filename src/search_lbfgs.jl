@@ -1,9 +1,6 @@
 # ------------------------------------------------------------------ #
 # Copyright 2026, Maximilian Hartenberger, University of Southampton #
 # ------------------------------------------------------------------ #
-import LinearAlgebra: norm, dot
-import Flows
-
 export OptLBFGSCache
 
 # ~~~ L-BFGS Optimization Cache ~~~

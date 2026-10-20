@@ -1,7 +1,6 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-using Printf
 
 # trust region method implementation
 function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)

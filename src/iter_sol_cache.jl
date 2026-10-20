@@ -2,9 +2,7 @@
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
 import Base.Threads: @sync, @spawn
-import LinearAlgebra: dot
 import GMRES: gmres!
-import Flows
 
 # ~~~ Matrix Type ~~~
 struct IterSolCache{X, N, NS, ORDERING, M, GST, LST, ST, DT, MT}
@@ -49,9 +47,9 @@ end
 Base.:*(mm::IterSolCache{X}, δz::MVector{X}) where {X} = mul!(similar(δz), mm, δz)
 
 # Compute mat-vec product
-function mul!(out::MVector{X, N, NS},
-               mm::IterSolCache{X, N, NS, ORDERING},
-               δz::MVector{X, N, NS}) where {X, N, NS, ORDERING}
+function LinearAlgebra.mul!(out::MVector{X, N, NS},
+                             mm::IterSolCache{X, N, NS, ORDERING},
+                             δz::MVector{X, N, NS}) where {X, N, NS, ORDERING}
     # aliases
     xT    = mm.xT
     Ls    = mm.Ls
@@ -90,7 +88,7 @@ function mul!(out::MVector{X, N, NS},
     end
 
     # shift derivative (if present) goes only on last element
-    NS == 2 && (out[ORDERING == :ashtrari ? 1 : N] .+= D[2](tmp[1], xT[N]).*δz.d[2])
+    NS == 2 && (out[ORDERING == :ashtari ? 1 : N] .+= D[2](tmp[1], xT[N]).*δz.d[2])
 
     # add phase locking constraints
     out.d = ntuple(j->dot(δz[1], D[j](tmp[1], z0[1])), NS)

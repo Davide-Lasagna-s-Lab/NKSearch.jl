@@ -1,8 +1,6 @@
 # ----------------------------------------------------------------- #
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
-
-import LinearAlgebra
 import HDF5: write, h5open, h5readattr, attributes, read
 
 export MVector, 
@@ -96,9 +94,9 @@ nsegments(::MVector{X, N}) where {X, N} = N
 Base.similar(z::MVector) = MVector(similar.(z.x), z.d...)
 Base.copy(z::MVector) = MVector(copy.(z.x), z.d...)
 Base.zero(z::MVector) = MVector(zero.(z.x), (zero(d) for d in z.d)...)
-LinearAlgebra.norm(z::MVector) = sqrt(LinearAlgebra.dot(z, z))
+LinearAlgebra.norm(z::MVector) = sqrt(dot(z, z))
 LinearAlgebra.dot(a::MVector{X, N}, b::MVector{X, N}) where {X, N} =
-    sum(a.d.*b.d) + sum(LinearAlgebra.dot.(a.x, b.x))
+    sum(a.d.*b.d) + sum(dot.(a.x, b.x))
 
 # define stuff necessary to use . notation with MVector (only works
 # for short! expressions) otherwise code is very slow!

@@ -2,8 +2,6 @@
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
 
-using Parameters
-
 export Options
 
 # ~~~ SEARCH OPTIONS FOR NEWTON ITERATIONS ~~~

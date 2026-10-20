@@ -1,9 +1,6 @@
 # ------------------------------------------------------------------ #
 # Copyright 2026, Maximilian Hartenberger, University of Southampton #
 # ------------------------------------------------------------------ #
-import LinearAlgebra: dot
-import Flows
-import Flows: RAMStageCache
 import Base.Threads: @sync, @spawn
 
 export StageIterCache, AdjointIterSolCache
@@ -44,7 +41,7 @@ end
 # Main outer constructor
 function StageIterCache(Gs, Ls, S, D, z0::MVector{X, N, NS}) where {X, N, NS}
     nstages = Flows.nstages(Gs[1].meth)
-    stage_caches = ntuple(i -> RAMStageCache(nstages, z0[1]), N)
+    stage_caches = ntuple(i -> Flows.RAMStageCache(nstages, z0[1]), N)
     StageIterCache(Gs, Ls, S, D,
                    ntuple(i -> similar(z0[1]), N),
                    ntuple(i -> similar(z0[1]), N),
@@ -69,9 +66,9 @@ Base.:*(mm::StageIterCache{X}, δz::MVector{X}) where {X} = mul!(similar(δz), m
 #
 # For the residual defined here, a Newton correction would solve J·dz = -F.
 # The L-BFGS driver instead applies the adjoint to F to form its gradient.
-function mul!(out::MVector{X, N, NS},
-               mm::StageIterCache{X, N, NS},
-               δz::MVector{X, N, NS}) where {X, N, NS}
+function LinearAlgebra.mul!(out::MVector{X, N, NS},
+                             mm::StageIterCache{X, N, NS},
+                             δz::MVector{X, N, NS}) where {X, N, NS}
     xT    = mm.xT
     Ls    = mm.Ls
     D     = mm.D
@@ -201,9 +198,9 @@ Base.:*(mm::AdjointIterSolCache{X}, w::MVector{X}) where {X} = mul!(similar(w), 
 #   (J·δz)[N] = S(-Dϕ_N·δz[N], s) + δz[1] - f(xT[N])/N·δT + dS/ds·δs
 # The adjoint applies the inverse shift S(·, -s) to w[N] *before*
 # the backward adjoint integration (Dϕ_N^T ∘ S^T).
-function mul!(out::MVector{X, N, NS},
-              mm::AdjointIterSolCache{X, N, NS},
-               w::MVector{X, N, NS}) where {X, N, NS}
+function LinearAlgebra.mul!(out::MVector{X, N, NS},
+                             mm::AdjointIterSolCache{X, N, NS},
+                              w::MVector{X, N, NS}) where {X, N, NS}
     Ls_adj       = mm.Ls_adj
     D            = mm.D
     S            = mm.S
