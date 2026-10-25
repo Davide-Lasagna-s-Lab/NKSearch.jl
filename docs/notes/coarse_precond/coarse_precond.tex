@@ -196,34 +196,37 @@ To reach long periods, we build the NKSearch operator (with period column and ph
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.55\textwidth]{figs/gmres_trajectory.pdf}
+\includegraphics[width=0.8\textwidth]{figs/gmres_trajectory.pdf}
 \caption{GMRES iterations versus period, trajectory operators, rtol $10^{-6}$, \texttt{coarse\_sweeps} $= 5$ unless stated.}
 \label{fig:traj}
 \end{figure}
 
 \begin{table}[t]
 \centering
-\begin{tabular}{rrrrrr}
+\begin{tabular}{rrrrrrrrr}
 \toprule
-$N$ & $T$ & no prec. & $k = 4$ & $k = 8$ & $k = 12$\\
+$N$ & $T$ & no prec. & $k = 4$ & $k = 5$ & $k = 6$ & $k = 7$ & $k = 8$ & $k = 12$\\
 \midrule
-8 & 16 & 48 & 22 & 5 & 4\\
-16 & 32 & 64 & 20 & 4 & 3\\
-32 & 64 & 103 & 21 & 4 & 2\\
-64 & 128 & 174 & 26 & 4 & 3\\
-128 & 256 & 300 & 31 & 4 & 2\\
-256 & 512 & 567 & 44 & 4 & 3\\
-512 & 1024 & 1089 & 65 & 4 & 3\\
-1024 & 2048 & -- & 89 & 4 & 3\\
+8 & 16 & 48 & 22 & 17 & 13 & 11 & 5 & 4\\
+16 & 32 & 64 & 20 & 15 & 11 & 11 & 4 & 3\\
+32 & 64 & 103 & 21 & 16 & 11 & 11 & 4 & 2\\
+64 & 128 & 174 & 26 & 19 & 14 & 11 & 4 & 3\\
+128 & 256 & 300 & 31 & 23 & 13 & 11 & 4 & 2\\
+256 & 512 & 567 & 44 & 30 & 17 & 14 & 4 & 3\\
+512 & 1024 & 1089 & 65 & 40 & 19 & 13 & 4 & 3\\
+1024 & 2048 & -- & 89 & 51 & 21 & 14 & 4 & 3\\
 \midrule
-\multicolumn{2}{l}{prediction \eqref{eq:predict}} & & 22 & 3.2 & $<2$\\
+\multicolumn{3}{l}{prediction \eqref{eq:predict}} & 22 & 18 & 12 & 10.4 & 3.2 & $<2$\\
+\multicolumn{3}{l}{gap $\lambda_k - \lambda_{k+1}$} & 0.055 & 0.066 & 0.184 & 0.098 & 1.460 & 4.65\\
 \bottomrule
 \end{tabular}
 \caption{GMRES iterations (Figure~\ref{fig:traj}). All solves were checked with the true residual. The unpreconditioned case was not run at $N = 1024$.}
 \label{tab:traj}
 \end{table}
 
-Without preconditioner the count grows linearly in $T$ (Table~\ref{tab:traj}, Figure~\ref{fig:traj}). With $k = 8$, at the spectral gap, it is 4 at every period up to $2048$, in agreement with \eqref{eq:predict}: $\log 10^{-6}/\log 0.014 = 3.2$. The cluster radius $0.014$ is also visible in Figure~\ref{fig:spectrum}. With $k = 4$ the prediction is 22, which is met for short orbits, but the count grows for long ones: the gap $\lambda_4 - \lambda_5$ is small and 5 sweeps do not converge the subspace. Table~\ref{tab:sweeps} confirms this: with 20 sweeps $k = 4$ stays at 22--23 up to $T = 512$, and with a single sweep even $k = 8$ degrades.
+Without preconditioner the count grows linearly in $T$ (Table~\ref{tab:traj}, Figure~\ref{fig:traj}). With $k = 8$, at the large spectral gap, it is 4 at every period up to $2048$, in agreement with \eqref{eq:predict}: $\log 10^{-6}/\log 0.014 = 3.2$. The cluster radius $0.014$ is also visible in Figure~\ref{fig:spectrum}.
+
+For $k = 4$ to $7$ the short orbits meet the prediction \eqref{eq:predict} within one or two iterations (22, 17, 13, 11 against 22, 18, 12, 10.4), so the coarse space removes what it should and GMRES then converges at the rate of the first excluded exponent. For long orbits the count creeps up: from 22 to 89 for $k = 4$ (gap $\lambda_k - \lambda_{k+1} = 0.055$), from 17 to 51 for $k = 5$ ($0.066$), from 13 to 21 for $k = 6$ ($0.184$) and from 11 to 14 for $k = 7$ ($0.098$). The two smallest gaps give by far the largest growth, but $k = 6$ and $7$ are not ordered by their gap, so the gap is not the only factor. The growth is not a failure of the coarse space as such but of its construction: with a small gap, 5 sweeps leave the computed subspace slightly off the invariant one, and the residual coupling to the unstable direction is again transported around the orbit. Table~\ref{tab:sweeps} confirms this: with 20 sweeps $k = 4$ stays at 22--23 up to $T = 512$, and with a single sweep even $k = 8$ degrades. In practice $k$ should be placed at a clear gap, or the number of sweeps raised when no such gap is available.
 
 \begin{table}[t]
 \centering

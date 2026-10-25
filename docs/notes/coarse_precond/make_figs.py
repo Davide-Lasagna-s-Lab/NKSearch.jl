@@ -43,18 +43,19 @@ f.savefig(fig("spectrum.pdf"))
 
 # ---------------------------------------------- GMRES vs T, trajectory operators
 k0 = [(float(r[1]), int(r[3])) for r in rows(data("trajectory_k0.txt")) if r[2] == "0"]
-co = rows(data("trajectory_coarse.txt"))
-f, a = plt.subplots(figsize=(3.6, 2.8))
+co = rows(data("trajectory_coarse.txt")) + rows(data("trajectory_k567.txt"))
+kc = {4: "C1", 5: "C3", 6: "C4", 7: "C5", 8: "C0", 12: "C2"}
+f, a = plt.subplots(figsize=(5.2, 3.2))
 T, m = zip(*k0); a.loglog(T, m, "o-", label="no preconditioner", color="k", ms=3)
-for k, c in ((4, "C1"), (8, "C0"), (12, "C2")):
-    d = [(float(r[1]), int(r[3])) for r in co if r[2] == str(k)]
+for k, c in kc.items():
+    d = sorted((float(r[1]), int(r[3])) for r in co if r[2] == str(k))
     T, m = zip(*d); a.loglog(T, m, "s-", label=f"coarse, $k={k}$", color=c, ms=3)
 d = [(float(r[1]), int(r[3])) for r in rows(data("sweeps_20.txt"))]
 T, m = zip(*d); a.loglog(T, m, "^", color="C1", mfc="none", ms=6, label="$k=4$, 20 sweeps")
 Tr = np.array([16, 2048]); a.loglog(Tr, 3*Tr**1 / 1, ":", color="0.5", lw=0.8)
 a.text(300, 1300, r"$\propto T$", color="0.4")
 a.set_xlabel("period $T$"); a.set_ylabel("GMRES iterations (rtol $10^{-6}$)")
-a.set_ylim(1.5, 3000); a.legend(fontsize=7, loc="upper left")
+a.set_ylim(1.5, 3000); a.legend(fontsize=7, loc="center left", bbox_to_anchor=(1.02, 0.5))
 f.savefig(fig("gmres_trajectory.pdf"))
 
 # ------------------------------------------------- Newton searches, long orbits
