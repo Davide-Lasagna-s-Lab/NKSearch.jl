@@ -18,7 +18,7 @@ GMRES iterations independent of the period}
 \maketitle
 
 \begin{abstract}
-In a multiple-shooting Newton--Krylov search with segments of fixed length $\tau$, the number of GMRES iterations per Newton step grows with the period $T$: faster than linearly with the regular row ordering, and linearly with the Ashtari ordering used by NKSearch. With the Ashtari ordering the Newton operator is $-I$ plus a cyclic block subdiagonal of segment tangent maps, and its spectrum consists of one circle of radius $e^{\lambda\tau}$ around $-1$ for every Floquet exponent $\lambda$. The linear growth comes only from the few circles of the unstable and neutral directions, which surround the origin. We remove them with a coarse space spanned, at every shooting point, by the leading covariant subspace of the tangent dynamics. The resulting right preconditioner is $-I$ outside the coarse space and an exact Galerkin solve on it; the coarse problem is small, cyclic and block-bidiagonal, and must be factorised by QR. For Kuramoto--Sivashinsky the number of GMRES iterations becomes 4 (rtol $10^{-6}$) at every period from 16 to 2048, as predicted by the first excluded Lyapunov exponent, and full Newton searches on orbits with periods 53 to 425 take 2--3 GMRES iterations per step. The total work of a search becomes proportional to $T$ instead of $T^2$, including the cost of building the subspaces. The method is the multiple-shooting counterpart of the Newton--Picard method of Lust et al., used as a Krylov preconditioner.
+In a multiple-shooting Newton--Krylov search with segments of fixed length $\tau$, the number of GMRES iterations per Newton step grows with the period $T$: faster than linearly with the regular row ordering, and linearly with the Ashtari ordering used by NKSearch. With the Ashtari ordering the Newton operator is $-I$ plus a cyclic block subdiagonal of segment tangent maps, and its spectrum consists of one circle of radius $e^{\lambda\tau}$ around $-1$ for every Floquet exponent $\lambda$. The linear growth comes only from the few circles of the unstable and neutral directions, which surround the origin. We remove them with a coarse space spanned, at every shooting point, by the leading covariant subspace of the tangent dynamics. The resulting right preconditioner is $-I$ outside the coarse space and an exact Galerkin solve on it; the coarse problem is small, cyclic and block-bidiagonal, and must be factorised by QR. For Kuramoto--Sivashinsky the number of GMRES iterations becomes 4 (rtol $10^{-6}$) at every period from 16 to 2048, as predicted by the first excluded Lyapunov exponent, and full Newton searches on orbits with periods 53 to 425 take 2--3 GMRES iterations per step. The total work of a search becomes proportional to $T$ instead of $T^2$, including the cost of building the subspaces. Longer segments collapse the contracting part of the spectrum: with $\tau = 6$ a coarse space of dimension 4 already gives 9--10 iterations at every period up to 1536. The method is the multiple-shooting counterpart of the Newton--Picard method of Lust et al., used as a Krylov preconditioner.
 \end{abstract}
 
 \tableofcontents
@@ -244,6 +244,58 @@ $N$ & $T$ & 1 sweep & 5 sweeps & 20 sweeps & 1 sweep & 5 sweeps\\
 \label{tab:sweeps}
 \end{table}
 
+\subsection{Segment length}
+\label{sec:tau}
+
+The cost of one matrix-vector product is one integration over the whole period, whatever the segment length: $N = T/\tau$ segments of length $\tau$. Longer segments shrink the circles of the contracting directions to $e^{\lambda_j\tau}$, so all of them collapse towards $-1$ (towards $1$ after preconditioning), and \eqref{eq:predict} predicts $m \propto 1/\tau$. They also speed up the subspace iteration, whose error decays as $e^{-(\lambda_k - \lambda_{k+1})\tau}$ per sweep. We repeated the trajectory test at equal periods, $T = 48$ to $1536$, with $\tau = 2$, $4$ and $6$, and $k = 2$ (the unstable and neutral directions only), $4$ and $8$ (Figure~\ref{fig:tau}, Table~\ref{tab:tau}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figs/tau.pdf}
+\caption{GMRES iterations versus period for segment lengths $\tau = 2, 4, 6$ (trajectory operators, rtol $10^{-6}$, 5 sweeps). The unpreconditioned case was run up to $T = 768$.}
+\label{fig:tau}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\begin{tabular}{r rr rrr rrr rrr}
+\toprule
+ & \multicolumn{2}{c}{no prec.} & \multicolumn{3}{c}{$k = 2$} & \multicolumn{3}{c}{$k = 4$} & \multicolumn{3}{c}{$k = 8$}\\
+\cmidrule(lr){2-3}\cmidrule(lr){4-6}\cmidrule(lr){7-9}\cmidrule(lr){10-12}
+$\tau$ & 48 & 768 & 48 & 1536 & pred. & 48 & 1536 & pred. & 48 & 1536 & pred.\\
+\midrule
+2 & 87 & 831 & 44 & 492 & 39 & 22 & 74 & 21.7 & 5 & 4 & 3.2\\
+4 & 44 & 417 & 18 & 144 & 19.6 & 12 & 18 & 10.8 & 4 & 4 & 1.6\\
+6 & 30 & 277 & 12 & 64 & 13.1 & 9 & 10 & 7.2 & 4 & 4 & 1.1\\
+\bottomrule
+\end{tabular}
+\caption{GMRES iterations at the shortest and longest period for each segment length (column headers: $T$), and the prediction \eqref{eq:predict} $\log 10^{-6}/(\lambda_{k+1}\tau)$.}
+\label{tab:tau}
+\end{table}
+
+\begin{itemize}
+\item \emph{Without preconditioner} the count is roughly $2.2\,N$ for all three $\tau$ (831, 417, 277 at $T = 768$): at fixed $T$ it falls as $1/\tau$, but it still grows linearly with $T$.
+\item \emph{For short orbits} every coarse case is close to the prediction, which halves when $\tau$ doubles ($k = 2$: 44, 18, 12 against 39, 19.6, 13.1; $k = 4$: 22, 12, 9 against 21.7, 10.8, 7.2).
+\item \emph{The growth with $T$} is much weaker for longer segments, because 5 sweeps converge the subspace better: from $T = 48$ to $1536$, $k = 4$ goes from 22 to 74 at $\tau = 2$ but only from 9 to 10 at $\tau = 6$, and $k = 2$ from 44 to 492 against 12 to 64.
+\item \emph{With $k = 8$} the count is 3--5 for every $\tau$ and $T$. The prediction falls below 2 for $\tau \ge 4$; the floor of about 4 iterations is presumably due to the bordering and to the approximate invariance of the computed subspace.
+\end{itemize}
+
+\paragraph{Cost.} Counting in integrations over the full period, one solve costs $m + k(s+1)$ with $s$ sweeps, and a Newton step in steady state $m + k$. At $T = 1536$ and with $s = 5$, a solve costs
+\begin{center}
+\begin{tabular}{rrrr}
+\toprule
+$\tau$ & $k = 2$ & $k = 4$ & $k = 8$\\
+\midrule
+2 & 504 & 98 & 52\\
+4 & 156 & 42 & 52\\
+6 & 76 & 34 & 52\\
+\bottomrule
+\end{tabular}
+\end{center}
+against 831, 417 and 277 at only half that period without preconditioner. With longer segments a smaller coarse space suffices: at $\tau = 6$, $k = 4$ is the cheapest option and its count is practically independent of $T$.
+
+\paragraph{Limits.} The segment length cannot grow without bound. Over one segment the unstable directions grow by $e^{\lambda_1\tau}$, which affects the conditioning of the blocks and, above all, the size of the basin of attraction of Newton's method, which is the reason for multiple shooting in the first place. With $N$ parallel workers the wall time of a product is proportional to $\tau$, so longer segments trade parallelism for fewer iterations. For KS, $e^{\lambda_1\tau} = 1.3$ at $\tau = 6$ and neither limit is close; for Kolmogorov flow at higher Reynolds numbers the leading exponent is larger, and $\tau$ should be chosen with both in mind. In the limit of one segment, the method becomes single-shooting Newton--Picard.
+
 \subsection{Newton searches on long periodic orbits}
 
 We converged periodic orbits from near recurrences with the hookstep method (\texttt{find\_upo.jl}; periods $52.043$, $53.134$, $76.846$). A long orbit is the $M$-fold repetition of the orbit with $T_0 = 53.134$ ($N_0 = 27$ segments): a genuine periodic orbit of period $MT_0$, with multipliers $\mu_j^M$. We perturb all seeds and the period by a relative $10^{-3}$ and reconverge with \texttt{:ls\_iterative}, GMRES rtol $10^{-3}$ (\texttt{scaling\_upo.jl}). All searches reach residuals between $5\cdot 10^{-13}$ and $3\cdot10^{-11}$ in 3--4 Newton steps.
@@ -343,7 +395,7 @@ All scripts are in \texttt{docs/notes/coarse\_precond} and need Flows.jl, GMRES.
 \item \texttt{ks.jl}: the KS model (included by the other scripts).
 \item \texttt{lyapunov.jl}: Lyapunov exponents $\to$ \texttt{data/lyapunov.txt}.
 \item \texttt{spectrum.jl}: eigenvalues of Figure~\ref{fig:spectrum} $\to$ \texttt{data/spectrum.txt}.
-\item \texttt{scaling\_trajectory.jl}: Table~\ref{tab:traj}; environment variables \texttt{NS}, \texttt{KS}, \texttt{SWEEPS} select the runs $\to$ \texttt{data/trajectory\_*.txt}, \texttt{data/sweeps\_*.txt}.
+\item \texttt{scaling\_trajectory.jl}: Table~\ref{tab:traj}; environment variables \texttt{TAU}, \texttt{TS} or \texttt{NS}, \texttt{KS}, \texttt{SWEEPS} select the runs (Tables~\ref{tab:traj}, \ref{tab:sweeps}, \ref{tab:tau}) $\to$ \texttt{data/trajectory\_*.txt}, \texttt{data/sweeps\_*.txt}, \texttt{data/tau*.txt}.
 \item \texttt{find\_upo.jl}: periodic orbits from near recurrences $\to$ \texttt{upos/}.
 \item \texttt{scaling\_upo.jl upos/T\_53.134.txt}: Table~\ref{tab:upo}; variables \texttt{MS}, \texttt{KS} $\to$ \texttt{data/upo\_newton.txt}.
 \item \texttt{python3 make\_figs.py}: the figures, from \texttt{data/}.

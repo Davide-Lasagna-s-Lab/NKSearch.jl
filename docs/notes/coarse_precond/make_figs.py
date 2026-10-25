@@ -90,3 +90,16 @@ f.savefig(fig("newton_upo.pdf"))
 # table of the Newton work, printed for the note
 for u in U:
     print(u["M"], u["N"], u["T"], u["k"], u["its"], work(u))
+
+# ------------------------------------------------ segment length τ = 2, 4, 6
+f, ax = plt.subplots(1, 3, figsize=(7.2, 2.7), sharey=True)
+for a, t in zip(ax, (2, 4, 6)):
+    R = rows(data(f"tau{t}.txt"))
+    for k, c, l in ((0, "k", "no prec."), (2, "C3", "$k=2$"), (4, "C1", "$k=4$"), (8, "C0", "$k=8$")):
+        d = sorted((float(r[1]), int(r[3])) for r in R if r[2] == str(k))
+        T, m = zip(*d); a.loglog(T, m, "o-" if k == 0 else "s-", color=c, ms=3, label=l)
+    a.set_title(rf"$\tau = {t}$"); a.set_xlabel("period $T$")
+    a.set_xticks([48, 192, 768]); a.set_xticklabels(["48", "192", "768"]); a.minorticks_off()
+ax[0].set_ylabel("GMRES iterations (rtol $10^{-6}$)"); ax[0].set_ylim(2, 1200)
+ax[2].legend(fontsize=7, loc="upper left")
+f.savefig(fig("tau.pdf"))
