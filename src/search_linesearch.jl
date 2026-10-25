@@ -10,7 +10,7 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
 
     # allocate memory
     b   = similar(z0)                   # right hand side
-    dz  = similar(z0); dz .*= 0.0       # temporary step
+    dz  = zero(z0)                      # temporary step
     tmps = ntuple(i->similar(z0[1]), nsegments(z0)) # one temporary for each segment
 
     # calculate initial error
@@ -32,7 +32,7 @@ function _search_linesearch!(G, L, S, D, z0, A, opts)
         update!(A, b, z0, opts)
 
         # solve system by overwriting b in place
-        dz, res_err_norm = _solve(dz, A, b, opts)
+        dz, res_err_norm = _solve(opts.gmres_start(dz), A, b, opts)
 
         # perform line search
         λ, e_norm = linesearch(G, S, z0, dz, opts, tmps)
