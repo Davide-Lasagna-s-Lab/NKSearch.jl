@@ -20,6 +20,7 @@ import Flows
 include("options.jl")
 include("multivector.jl")
 
+include("coarse_precond.jl")
 include("iter_sol_cache.jl")
 include("direct_sol_cache.jl")
 include("lbfgs_sol_cache.jl")

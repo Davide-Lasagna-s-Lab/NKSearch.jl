@@ -40,7 +40,15 @@ Configure a Newton or L-BFGS shooting search. Only override the needed options.
 # GMRES (iterative Newton only)
 - `gmres_maxiter=10`, `gmres_rtol=1e-3`, `gmres_verbose=true`: inner solve.
 - `gmres_callback=nothing`: passed to GMRES.
-- `gmres_start=dz -> (dz .*= 0.0; dz)`: initialises the hookstep correction.
+- `gmres_start=dz -> (dz .*= 0.0; dz)`: initial guess of every GMRES solve (line search and hookstep).
+
+# Coarse preconditioner (`:ls_iterative` with `row_order=:ashtari` only)
+- `coarse_dim=0`: dimension `k` of the coarse space at each seed, the leading
+  covariant subspace of the tangent dynamics; `0` disables the preconditioner.
+  Take `k` larger than the number of unstable and neutral Floquet directions.
+- `coarse_sweeps=5`: subspace-iteration rounds at the first Newton step. Later
+  steps warm start from the previous one and cost one round, i.e. `k` tangent
+  integrations per segment. See `docs/notes/coarse_precond.tex`.
 
 # Trust region (Newton only)
 - `tr_radius_init=1.0`, `tr_radius_max=1e8`: initial and maximum radius.
@@ -99,6 +107,10 @@ opts = Options(method=:tr_iterative, maxiter=25,
     gmres_callback::GT      = (args...)->false     # GMRES callback function
     gmres_start::W          = dz->(dz .*= 0.0; dz) # GMRES warm start based on previous Newton step
 
+    # coarse preconditioner
+    coarse_dim::Int         = 0                    # coarse directions per seed (0: none)
+    coarse_sweeps::Int      = 5                    # subspace-iteration rounds at the first Newton step
+
     # trust_region algorithm parameters
     min_step::Float64       = 1e-4                 # minimum step tolerance
     α::Float64              = 1                    # over-relaxation factor for trust region update
@@ -115,4 +127,6 @@ opts = Options(method=:tr_iterative, maxiter=25,
     @assert fd_order in (1, 2)
     @assert ls_method in (:backtracking,)
     @assert row_order in (:regular, :ashtari)
+    @assert coarse_dim >= 0 && coarse_sweeps >= 0
+    @assert coarse_dim == 0 || (method == :ls_iterative && row_order == :ashtari)
 end

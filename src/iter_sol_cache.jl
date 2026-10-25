@@ -5,7 +5,7 @@ import Base.Threads: @sync, @spawn
 import GMRES: gmres!
 
 # ~~~ Matrix Type ~~~
-struct IterSolCache{X, N, NS, ORDERING, M, GST, LST, ST, DT, MT}
+struct IterSolCache{X, N, NS, ORDERING, M, GST, LST, ST, DT, MT, PC}
        Gs::GST               # flow operator(s)
        Ls::LST               # linearised flow operator (s)
         S::ST                # space shift operator
@@ -16,6 +16,7 @@ struct IterSolCache{X, N, NS, ORDERING, M, GST, LST, ST, DT, MT}
        z0::MVector{X, N, NS} # current orbit
      mons::MT                # monitor
      opts::Options           # options
+       pc::PC                # coarse preconditioner, or nothing
 
      function IterSolCache{X, N, NS, ORDERING}(Gs::GST,
                                                Ls::LST,
@@ -25,8 +26,8 @@ struct IterSolCache{X, N, NS, ORDERING, M, GST, LST, ST, DT, MT}
                                             dxTdT::NTuple{N, X},
                                               tmp::NTuple{M, X},
                                                z0::MVector{X, N, NS},
-                                             mons::MT, opts) where {X, N, NS, ORDERING, M, GST, LST, ST, DT, MT}
-        new{X, N, NS, ORDERING, M, GST, LST, ST, DT, MT}(Gs, Ls, S, D, xT, dxTdT, tmp, z0, mons, opts)
+                                             mons::MT, opts, pc::PC) where {X, N, NS, ORDERING, M, GST, LST, ST, DT, MT, PC}
+        new{X, N, NS, ORDERING, M, GST, LST, ST, DT, MT, PC}(Gs, Ls, S, D, xT, dxTdT, tmp, z0, mons, opts, pc)
      end
 end
 
@@ -40,7 +41,8 @@ function IterSolCache(Gs, Ls, S, D, z0::MVector{X, N, NS}, opts) where {X, N, NS
                                            ntuple(i->similar(z0[1]), ntmps),
                                            similar(z0),
                                            ntuple(i->mon_type(z0[1]), nsegments(z0)),
-                                           opts)
+                                           opts,
+                                           opts.coarse_dim == 0 ? nothing : CoarsePrecond{X, N, NS}(z0, opts.coarse_dim))
 end
 
 # Main interface is matrix-vector product exposed to the Krylov solver
@@ -149,6 +151,9 @@ function update!(mm::IterSolCache{X, N, NS, ORDERING},
     # Phase right-hand sides are zero: constrain the correction, not an absolute phase.
     b.d = zero.(b.d)
 
+    # coarse space and coarse matrix at the new orbit
+    update!(mm.pc, mm.Ls, S, mm.D, z0, xT, dxTdT, opts)
+
     return nothing
 end
 
@@ -159,6 +164,19 @@ function _solve(x::MV, A::IterSolCache, b::MV, opts::Options) where {MV<:MVector
                                           maxiter=opts.gmres_maxiter,
                                           verbose=opts.gmres_verbose,
                                          callback=opts.gmres_callback)
+    return x, res_err_norm
+end
+
+# Right-preconditioned solve: GMRES on A M⁻¹ y = b, then x = M⁻¹ y. The warm
+# start x is mapped to y = M x, and the residual is the same as for A x = b.
+function _solve(x::MV, A::IterSolCache{X, N, NS, ORD, M, GST, LST, ST, DT, MT, PC},
+                b::MV, opts::Options) where {MV<:MVector, X, N, NS, ORD, M, GST, LST, ST, DT, MT, PC<:CoarsePrecond}
+    y = mul_precond!(similar(x), A.pc, x)
+    y, res_err_norm, _ = gmres!(y, RightPrecOp(A, A.pc, similar(x)), b; rel_rtol=opts.gmres_rtol,
+                                                                         maxiter=opts.gmres_maxiter,
+                                                                         verbose=opts.gmres_verbose,
+                                                                        callback=opts.gmres_callback)
+    ldiv_precond!(x, A.pc, y)
     return x, res_err_norm
 end
 
