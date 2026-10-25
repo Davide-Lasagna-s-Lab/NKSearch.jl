@@ -1,0 +1,4 @@
+    N      T    k  GMRES  rel.res     coarse  time[s]
+   64    128    4     23  8.6e-07        257     15.8
+  256    512    4     22  9.3e-07       1025     48.4
+EXIT 0
