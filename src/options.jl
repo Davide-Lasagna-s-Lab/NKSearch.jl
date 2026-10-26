@@ -48,7 +48,7 @@ Configure a Newton or L-BFGS shooting search. Only override the needed options.
   Take `k` larger than the number of unstable and neutral Floquet directions.
 - `coarse_sweeps=5`: subspace-iteration rounds at the first Newton step. Later
   steps warm start from the previous one and cost one round, i.e. `k` tangent
-  integrations per segment. See `docs/notes/coarse_precond.tex`.
+  integrations per segment.
 
 # Trust region (Newton only)
 - `tr_radius_init=1.0`, `tr_radius_max=1e8`: initial and maximum radius.

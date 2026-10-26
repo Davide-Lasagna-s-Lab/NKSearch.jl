@@ -1,6 +1,6 @@
 # ----------------------------------------------------------------- #
 # Coarse-space right preconditioner for the Ashtari-ordered          #
-# multiple-shooting Newton operator. See docs/notes/coarse_precond.  #
+# multiple-shooting Newton operator.                                 #
 # ----------------------------------------------------------------- #
 import SparseArrays: sparse, SparseMatrixCSC
 import SparseArrays.SPQR: QRSparse
