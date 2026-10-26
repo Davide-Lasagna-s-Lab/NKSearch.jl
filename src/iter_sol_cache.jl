@@ -2,7 +2,7 @@
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
 import Base.Threads: @sync, @spawn
-import GMRES: gmres!
+import GMRES: gmres!, hookstep!
 
 # ~~~ Matrix Type ~~~
 struct IterSolCache{X, N, NS, ORDERING, M, GST, LST, ST, DT, MT, PC}

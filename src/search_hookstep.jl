@@ -35,18 +35,24 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
         return status
     end
 
+    # the Krylov space of the last GMRES (iterative method), kept after a rejected step: the orbit, the Jacobian and
+    # the right-hand side have not changed, so the hookstep for the smaller radius needs no new GMRES
+    K        = nothing
+    rejected = false
+
     # newton iterations loop
     for iter = 1:opts.maxiter
         # callback
         opts.callback(iter, z, copy(b), e_norm, 0.0, 1.0, z.d[1], cache) && (status = :callback_satisfied; break)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # UPDATE CACHE
-        update!(cache, b, z, opts)
+        # UPDATE CACHE (not after a rejected step)
+        rejected || update!(cache, b, z, opts)
 
         # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        # SOLVE TRUST REGION PROBLEM
-        hits_boundary, which, step, gmres_res, gmres_it = solve_tr_subproblem!(opts.gmres_start(dz), b, z, cache, tr_radius, opts)
+        # SOLVE TRUST REGION PROBLEM (after a rejected step, in the Krylov space of the last GMRES)
+        hits_boundary, which, step, gmres_res, gmres_it, K =
+            solve_tr_subproblem!(opts.gmres_start(dz), b, z, cache, tr_radius, opts, rejected ? K : nothing)
 
         # calc actual reductions
         e_norm_curr = e_norm_λ(Gs, S, z, dz, 0.0, tmps)
@@ -71,12 +77,15 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
             if rho > opts.eta
                 z .= z .+ dz
                 e_norm = e_norm_next
+                rejected = false
             else
                 e_norm = e_norm_curr
+                rejected = K !== nothing
             end
         else
             z .= z .+ dz
             e_norm = e_norm_next
+            rejected = false
         end
 
         dz_norm = norm(dz)
@@ -111,36 +120,46 @@ function _search_hookstep!(Gs, Ls, S, D, z, cache, opts)
     return status
 end
 
-# Solve the Trust Region optimisation subproblem
-function solve_tr_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+# Solve the Trust Region optimisation subproblem; also return the Krylov space of the
+# iterative method (nothing for the direct one), and take the one of the last GMRES, K,
+# after a rejected step
+function solve_tr_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options, K=nothing)
 
     if opts.method == :tr_direct
-        return solve_dogleg_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+        return (solve_dogleg_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)..., nothing)
     end
 
     if opts.method == :tr_iterative
-        return solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
+        return solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options, K)
     end
 
     # this should not happen as we restrict the method in the Options struct
     throw(ArgumentError("panic!"))
 end
 
-function solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options)
-    # solve optimisation problem (this is always using GMRES)
-    dz, res_err_norm, n_iter = _solve(dz, cache, b, tr_radius, opts)
+function solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, tr_radius::Real, opts::Options, K=nothing)
+    # solve optimisation problem (this is always using GMRES, which stops when the
+    # unconstrained step in its Krylov space meets the tolerance, and returns the
+    # hookstep in that space). After a rejected step, the hookstep for the new radius
+    # in the Krylov space K of the last GMRES, with no product with the Jacobian
+    if K === nothing
+        dz, res_err_norm, n_iter, K = _solve(dz, cache, b, tr_radius, opts)
+    else
+        dz, res_err_norm = hookstep!(dz, K, tr_radius)
+        n_iter = 0
+    end
 
     # we consider a newton step only if we are within the trust region
     # and we have managed to reduce the error at least as much as required
-    # by the gmres stopping tolerance. If the trust region is small, it might
-    # not be possible to make res_err_norm smaller than required, regardless
-    # of the number of iterations. This is a symptom of the fact that
-    # the GMRES solution is affected by the trust region size and we can thus 
-    # use this info to decide whether we want to increase or decrease it.
-    if norm(dz) < tr_radius * (1 + 1e-6) && res_err_norm <= opts.gmres_rtol
-        return false, :newton, norm(dz), res_err_norm, n_iter
+    # by the gmres stopping tolerance (relative to the right-hand side). If the
+    # trust region is small, it might not be possible to make res_err_norm smaller
+    # than required, regardless of the number of iterations. This is a symptom of
+    # the fact that the GMRES solution is affected by the trust region size and we
+    # can thus use this info to decide whether we want to increase or decrease it.
+    if norm(dz) < tr_radius * (1 + 1e-6) && res_err_norm <= opts.gmres_rtol * norm(b)
+        return false, :newton, norm(dz), res_err_norm, n_iter, K
     else
-        return true,  :hkstep, tr_radius, res_err_norm, n_iter
+        return true,  :hkstep, tr_radius, res_err_norm, n_iter, K
     end
 end
 
