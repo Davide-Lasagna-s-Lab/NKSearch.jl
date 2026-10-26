@@ -145,7 +145,7 @@ function solve_hookstep_subproblem!(dz::MVector, b::MVector, z::MVector, cache, 
     if K === nothing
         dz, res_err_norm, n_iter, K = _solve(dz, cache, b, tr_radius, opts)
     else
-        dz, res_err_norm = hookstep!(dz, K, tr_radius)
+        dz, res_err_norm = _hookstep!(dz, cache.pc, K, tr_radius)
         n_iter = 0
     end
 

@@ -5,6 +5,7 @@
 import SparseArrays: sparse, SparseMatrixCSC
 import SparseArrays.SPQR: QRSparse
 import Random: randn!
+import GMRES
 
 # With the Ashtari ordering the Newton operator is A = -I + C (plus the period
 # and shift columns and the phase rows), where C holds the segment tangent maps
@@ -199,5 +200,43 @@ end
 
 Base.:*(op::RightPrecOp, y::MVector) = op.A*ldiv_precond!(op.tmp, op.pc, y)
 
+# The hookstep for the radius Δ in the Krylov space K of A M⁻¹, returned by the
+# trust-region GMRES. The trust region bounds the step in the original unknowns,
+# as without preconditioner: the step is x - x₀ = M⁻¹ Q c, with Q the Arnoldi
+# vectors and c the coefficients. Its norm needs only coarse quantities. With
+# g_j = Wᵀ q_j and h_j = E⁻¹ g_j, M⁻¹ q_j = -(I - W Wᵀ) q_j + W h_j, the two parts
+# are orthogonal and
+#
+#           (M⁻¹ q_i)ᵀ (M⁻¹ q_j) = δ_ij - g_iᵀ g_j + h_iᵀ h_j.
+#
+# With this Gram matrix G = Rᵀ R, u = R c has the norm of the step, and the
+# hookstep in u is the usual one for the matrix H R⁻¹.
+function _hookstep!(x::MVector, pc::CoarsePrecond, K, Δ::Real)
+    # ---- coarse restrictions of the Arnoldi vectors ----
+    m = size(K.H, 2)
+    Γ = zeros(length(pc.g), m)
+    for j in 1:m
+        Γ[:, j] .= _restrict!(pc.g, pc, K.Q[j])
+    end
+    Θ = pc.F \ Γ
+
+    # ---- Gram matrix of the steps M⁻¹ q_j and the inverse of its square root ----
+    G   = Symmetric(I - Γ'*Γ + Θ'*Θ)
+    F   = eigen(G)
+    R⁻¹ = F.vectors*Diagonal(1 ./ sqrt.(F.values))
+
+    # ---- hookstep in u = R c, whose norm is the norm of the step ----
+    u, _ = GMRES._hookstep(K.H*R⁻¹, K.g, Δ)
+    c    = R⁻¹*u
+
+    # ---- step: x = M⁻¹ (y₀ + Q c) = x₀ + M⁻¹ Q c ----
+    y = copy(K.x₀)
+    GMRES.lincomb!(y, K.Q, c; add=true)
+    ldiv_precond!(x, pc, y)
+
+    return x, norm(K.H*c - K.g)
+end
+
 # no coarse preconditioner
 update!(pc::Nothing, args...) = nothing
+_hookstep!(x::MVector, pc::Nothing, K, Δ::Real) = GMRES.hookstep!(x, K, Δ)

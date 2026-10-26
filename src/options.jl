@@ -42,13 +42,15 @@ Configure a Newton or L-BFGS shooting search. Only override the needed options.
 - `gmres_callback=nothing`: passed to GMRES.
 - `gmres_start=dz -> (dz .*= 0.0; dz)`: initial guess of every GMRES solve (line search and hookstep).
 
-# Coarse preconditioner (`:ls_iterative` with `row_order=:ashtari` only)
+# Coarse preconditioner (`:ls_iterative` or `:tr_iterative`, `row_order=:ashtari`)
 - `coarse_dim=0`: dimension `k` of the coarse space at each seed, the leading
   covariant subspace of the tangent dynamics; `0` disables the preconditioner.
   Take `k` larger than the number of unstable and neutral Floquet directions.
 - `coarse_sweeps=5`: subspace-iteration rounds at the first Newton step. Later
   steps warm start from the previous one and cost one round, i.e. `k` tangent
   integrations per segment.
+  With `:tr_iterative` the trust region bounds the step in the original
+  unknowns, as without the preconditioner.
 
 # Trust region (Newton only)
 - `tr_radius_init=1.0`, `tr_radius_max=1e8`: initial and maximum radius.
@@ -128,5 +130,5 @@ opts = Options(method=:tr_iterative, maxiter=25,
     @assert ls_method in (:backtracking,)
     @assert row_order in (:regular, :ashtari)
     @assert coarse_dim >= 0 && coarse_sweeps >= 0
-    @assert coarse_dim == 0 || (method == :ls_iterative && row_order == :ashtari)
+    @assert coarse_dim == 0 || (method in (:ls_iterative, :tr_iterative) && row_order == :ashtari)
 end

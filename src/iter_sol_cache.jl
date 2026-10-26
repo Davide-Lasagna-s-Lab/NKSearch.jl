@@ -185,3 +185,22 @@ _solve(x::MV, A::IterSolCache, b::MVector, tr_radius::Real, opts::Options) where
                                 maxiter=opts.gmres_maxiter,
                                 verbose=opts.gmres_verbose,
                                callback=opts.gmres_callback)
+
+# Right-preconditioned hookstep: GMRES on A M⁻¹ from y = M x, which stops when
+# the unconstrained step in its Krylov space meets the tolerance, then the
+# hookstep of that Krylov space with the trust region on the step in x
+function _solve(x::MV, A::IterSolCache{X, N, NS, ORD, M, GST, LST, ST, DT, MT, PC},
+                b::MV, tr_radius::Real, opts::Options) where {MV<:MVector, X, N, NS, ORD, M, GST, LST, ST, DT, MT, PC<:CoarsePrecond}
+    # ---- Krylov space of A M⁻¹ ----
+    y = mul_precond!(similar(x), A.pc, x)
+    _, _, n_iter, K = gmres!(y, RightPrecOp(A, A.pc, similar(x)), b, tr_radius; rel_rtol=opts.gmres_rtol,
+                                                                               maxiter=opts.gmres_maxiter,
+                                                                               verbose=opts.gmres_verbose,
+                                                                              callback=opts.gmres_callback)
+
+    # ---- hookstep in the original unknowns (none if the callback stopped GMRES at once) ----
+    K === nothing && return ldiv_precond!(x, A.pc, y), norm(b), n_iter, K
+    x, res_err_norm = _hookstep!(x, A.pc, K, tr_radius)
+
+    return x, res_err_norm, n_iter, K
+end
