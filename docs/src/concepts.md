@@ -93,6 +93,15 @@ vectors. L-BFGS uses a separate stage-cache interface described in its guide.
 | `S` | spatial shift (RPO only) | `S(x, s)` shifts `x` by `s` |
 | `dS` | shift generator (RPO only) | `dS(out, x)` writes the spatial phase direction |
 
+[`make_adjoint_problem`](@ref) is the exception. Transposing the shifted
+wrap-around row needs the *inverse* shift, so it takes that as a separate
+`S_inv` argument, contracted by `S_inv(S(x, s), s) == x`, rather than deriving
+it from `S`. Negating `s` is not a general way to invert the shift: a closure
+bundling the continuous shift with a fixed discrete symmetry that is not one of
+the unknowns, as in Kolmogorov flow, is not inverted that way. The L-BFGS
+adjoint still derives its inverse by negation and so does require that negating
+`s` invert the shift.
+
 Newton period differences also call `G(x, span, monitor)` with a
 `Flows.StoreNFromLast` monitor and restart from its saved state. That state
 must include everything needed to restart the numerical method, including

@@ -63,8 +63,9 @@ function (::RPOAdjoint{F})(t, X, W, dW) where {F}
     return dW
 end
 
-# the rotation of (x, y) by s, and its generator
+# the rotation of (x, y) by s, its inverse (what the adjoint problem takes), and its generator
 rpo_shift(X, s) = (σ = first(s); x = X[1]; y = X[2]; X[1] = cos(σ)*x - sin(σ)*y; X[2] = sin(σ)*x + cos(σ)*y; X)
+rpo_unshift(X, s) = rpo_shift(X, -first(s))
 rpo_generator!(out, X) = (out .= (-X[2], X[1], 0.0, 0.0); out)
 
 @testset "sensitivity of a relative periodic orbit   " begin
@@ -105,7 +106,7 @@ rpo_generator!(out, X) = (out .= (-X[2], X[1], 0.0, 0.0); out)
     LA  = flow(RPOAdjoint{false}(), RK4(zeros(4), Flows.ContinuousMode(true)), TimeStepFromStorage(dt))
     JA  = flow(RPOAdjoint{true}(),  RK4(zeros(4), Flows.ContinuousMode(true)), TimeStepFromStorage(dt))
     jTJ = z[1][3]^2 - μ_rpo/2
-    A, b = make_adjoint_problem(z, store, LA, JA, rpo_shift, D, jTJ)
+    A, b = make_adjoint_problem(z, store, LA, JA, rpo_unshift, D, jTJ)
     λ, res = NKSearch.gmres!(zero(b), A, b; rel_rtol=1e-12, maxiter=50, verbose=false)
 
     # (λ along each segment, backwards from its value at the start of the segment, and the integral by the trapezoids)
@@ -120,11 +121,107 @@ rpo_generator!(out, X) = (out .= (-X[2], X[1], 0.0, 0.0); out)
     end
     @test abs(-integral/T - 0.5) < 1e-5
 
+    # ---- the same shift, split differently between the closure and the unknown ----
+    # S_off(X, σ) = R(σ + θ₀) with θ₀ fixed and the shift unknown σ = s - θ₀. Every FORWARD
+    # application is unchanged, R(σ + θ₀) = R(s), so the orbit still closes, but the inverse is
+    # R(-(σ + θ₀)), not R(-σ): negating the unknown alone does not invert this closure. That is what
+    # a shift carrying a symmetry outside the unknowns looks like — in Kolmogorov flow the continuous
+    # x-shift is bundled with a fixed discrete y-shift. rpo_generator! is still the right D[2], since
+    # ∂_σ S_off(x, σ) is evaluated at u(0) and the extra rotation commutes with the one-parameter
+    # group, and dT/dμ, dσ/dμ are the same numbers because θ₀ does not depend on μ.
+    #
+    # The split is a pure relabelling, so both assemblies must be unchanged by it, to round-off.
+    # Compare the operators and the right-hand sides, not only what the solves return: this system's
+    # adjoint is driven by a functional of (u, v) alone and carries almost no weight in the rotated
+    # (x, y) plane, so the solution is a far weaker probe than the mat-vec.
+    θ₀        = 0.7
+    S_off     = (X, σ) -> rpo_shift(X,   first(σ) + θ₀)
+    S_inv_off = (X, σ) -> rpo_shift(X, -(first(σ) + θ₀))
+    z_off     = MVector(copy.(z.x), T, s - θ₀)
+
+    # both problem builders deep-copy these per segment, so one pair serves every assembly below
+    Lo = flow(RPOTangent{false}(), RK4(zeros(4), Flows.ContinuousMode(false)), TimeStepFromStorage(dt))
+    Jo = flow(RPOTangent{true}(),  RK4(zeros(4), Flows.ContinuousMode(false)), TimeStepFromStorage(dt))
+
+    # a yardstick for the comparisons below
+    scale(a)     = sqrt(sum(norm(a[i])^2 for i in 1:N) + sum(abs2, a.d))
+    differ(a, b) = sqrt(sum(norm(a[i] - b[i])^2 for i in 1:N) + sum(abs2, a.d .- b.d))
+
+    for (Ap, bp, Ao, bo) in ((NKSearch.make_tangent_problem(z,     store, Lo, Jo, rpo_shift,   D)...,
+                              NKSearch.make_tangent_problem(z_off, store, Lo, Jo, S_off,       D)...),
+                             (make_adjoint_problem(z,     store, LA, JA, rpo_unshift, D, jTJ)...,
+                              make_adjoint_problem(z_off, store, LA, JA, S_inv_off,   D, jTJ)...))
+        @test differ(bp, bo) < 1e-12*scale(bp)
+        for trial = 1:3
+            v = MVector(ntuple(i -> randn(4), N), randn(), randn())
+            @test differ(Ap*v, Ao*v) < 1e-12*scale(Ap*v)
+        end
+    end
+
+    # and the solves, end to end
+    Ao, bo = NKSearch.make_tangent_problem(z_off, store, Lo, Jo, S_off, D)
+    wo, _  = NKSearch.gmres!(zero(bo), Ao, bo; rel_rtol=1e-12, maxiter=50, verbose=false)
+    @test abs(wo.d[1] - Tp) < 1e-6*abs(Tp)
+    @test abs(wo.d[2] - sp) < 1e-6*abs(sp)
+
+    Ao, bo = make_adjoint_problem(z_off, store, LA, JA, S_inv_off, D, jTJ)
+    λo, _  = NKSearch.gmres!(zero(bo), Ao, bo; rel_rtol=1e-12, maxiter=50, verbose=false)
+    @test differ(λo, λ) < 1e-8*scale(λ)
+
     # ---- the adjoint problem by the stage caches gives the same solution ----
     LA = flow(RPOAdjoint{false}(), RK4(zeros(4), Flows.DiscreteMode(true)), TimeStepFromCache())
     JA = flow(RPOAdjoint{true}(),  RK4(zeros(4), Flows.DiscreteMode(true)), TimeStepFromCache())
-    A, b = make_adjoint_problem(z, cache, LA, JA, rpo_shift, D, jTJ)
+    A, b = make_adjoint_problem(z, cache, LA, JA, rpo_unshift, D, jTJ)
     λc, res = NKSearch.gmres!(zero(b), A, b; rel_rtol=1e-12, maxiter=50, verbose=false)
     δ = sqrt(sum(norm(λc[i] - λ[i])^2 for i in 1:N) + sum(abs2, λc.d .- λ.d))
     @test δ < 1e-6*sqrt(sum(norm(λ[i])^2 for i in 1:N) + sum(abs2, λ.d))
+
+    # ---- the adjoint operator is the exact transpose of the tangent operator ----
+    # The adjoint unknown is a relabelling of the multipliers of the tangent rows: component m
+    # multiplies tangent row perm[m], the multiplier of the wrap-around row is held in the frame of
+    # u(T) (pre-multiplied by Sᵀ) and the scalar unknowns are negated, the sign convention of the
+    # `-=` on the border row r. The assembly also leaves its own output on row r pre-multiplied by
+    # Sᵀ, so one forward shift puts it back. Undo all of that and ⟨Av, y⟩ = ⟨v, Aᵀy⟩ must hold.
+    #
+    # The stage caches are used because they make the segment operators exact discrete transposes of
+    # each other; the store path is only transpose-accurate to the integration error. Both shift
+    # parameterisations are run: the offset one is what catches an assembly that goes back to
+    # deriving its inverse by negating the unknown.
+    Lc  = flow(RPOTangent{false}(), RK4(zeros(4), Flows.DiscreteMode(false)), TimeStepFromCache())
+    Jc  = flow(RPOTangent{true}(),  RK4(zeros(4), Flows.DiscreteMode(false)), TimeStepFromCache())
+    LAc = flow(RPOAdjoint{false}(), RK4(zeros(4), Flows.DiscreteMode(true)),  TimeStepFromCache())
+    JAc = flow(RPOAdjoint{true}(),  RK4(zeros(4), Flows.DiscreteMode(true)),  TimeStepFromCache())
+
+    for (zq, Sf, Si) in ((z, rpo_shift, rpo_unshift), (z_off, S_off, S_inv_off)),
+        row_order in (:ashtari, :regular)
+
+        Atan, _ = NKSearch.make_tangent_problem(zq, cache, Lc, Jc, Sf, D; row_order=row_order)
+        Aadj, _ = make_adjoint_problem(zq, cache, LAc, JAc, Si, D, jTJ; row_order=row_order)
+
+        # adjoint component m multiplies tangent row perm[m]; perm is an involution and perm[1] is
+        # the border row r, the one the assembly shifts (N = 2 here)
+        perm = row_order == :ashtari ? ntuple(m -> m == 1 ? 1 : N - m + 2, N) : ntuple(m -> N - m + 1, N)
+        σ    = Base.tail(zq.d)
+
+        for trial = 1:3
+            v  = MVector(ntuple(i -> randn(4), N), randn(), randn())
+            q  = MVector(ntuple(i -> randn(4), N), randn(), randn())
+            Av = Atan*v
+            Aq = Aadj*q
+
+            # the tangent-row multipliers the adjoint unknown q stands for
+            y = ntuple(i -> zeros(4), N)
+            y[perm[1]] .= Sf(copy(q[1]), σ)
+            for m = 2:N
+                y[perm[m]] .= q[m]
+            end
+
+            # and the adjoint output, relabelled back and un-shifted, which must be Aᵀy
+            ŷ = ntuple(p -> p == 1 ? Sf(copy(Aq[perm[1]]), σ) : Aq[perm[p]], N)
+
+            lhs = sum(dot(Av[p], y[p]) for p = 1:N) - sum(Av.d .* q.d)
+            rhs = sum(dot(v[p],  ŷ[p]) for p = 1:N) + sum(v.d  .* Aq.d)
+            @test abs(lhs - rhs) < 1e-9*max(abs(lhs), abs(rhs))
+        end
+    end
 end
