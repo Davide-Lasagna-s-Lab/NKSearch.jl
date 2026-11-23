@@ -2,14 +2,8 @@
 # Copyright 2017-18, Davide Lasagna, AFM, University of Southampton #
 # ----------------------------------------------------------------- #
 
-# ! commit message:
-# !  1. sensitivity code now accepts both RAMStorage and RAMStageCache
-# !  2. subtracted offset when using RAMStorage to avoid timespan error from floating point arithmetic
-# !  3. cleaned up imports and exports
-# !  4. generalised code to accept arbitrary number of continuous shifts
-
 # ~~~ Matrix Type ~~~
-struct TangentProblemLHS{X, N, NS, ORDERING, LST, ST, DT}
+struct TangentProblemLHS{X, N, NS, ORDERING, LST, ST, DT, FT}
        Ls::LST               # linearised flow operator(s)
         S::ST                # space shift operator
         D::DT                # time (and space) derivative operators
@@ -17,14 +11,16 @@ struct TangentProblemLHS{X, N, NS, ORDERING, LST, ST, DT}
        xT::X                 # final conditions shifted back, S(u(T), s), which is u(0) on a converged orbit
       tmp::X                 # temporary storage
         z::MVector{X, N, NS} # current orbit
+    fixed::FT                # indices of the period/shift perturbations held at zero (see fixed.jl)
 
     TangentProblemLHS{X, N, NS, ORDERING}(Ls::LST,
                                            S::ST,
                                            D::DT,
                                           x0::X,
                                           xT::X,
-                                           z::MVector{X, N, NS}) where {X, N, NS, ORDERING, LST, ST, DT} =
-        new{X, N, NS, ORDERING, LST, ST, DT}(Ls, S, D, x0, xT, similar(z[1]), z)
+                                           z::MVector{X, N, NS},
+                                       fixed::FT) where {X, N, NS, ORDERING, LST, ST, DT, FT} =
+        new{X, N, NS, ORDERING, LST, ST, DT, FT}(Ls, S, D, x0, xT, similar(z[1]), z, fixed)
 end
 
 function _make_tangent_rhs!(rhs::MVector{X, N, NS}, Js, S, s, row_order) where {X, N, NS}
@@ -61,7 +57,9 @@ function make_tangent_problem(z::MVector{X, N, NS},
                               J,
                               S,
                               D;
-                      row_order::Symbol=:ashtari) where {X, N, NS}
+                      row_order::Symbol=:ashtari,
+                          fixed=(),
+                dependence_rtol::Real=1e-3) where {X, N, NS}
     row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
 
     # period and shift
@@ -82,10 +80,13 @@ function make_tangent_problem(z::MVector{X, N, NS},
     x0 = store(similar(z[1]), 0, Val(0))
     xT = copy(x0)
 
+    # period/shift perturbations held fixed
+    fx = _resolve_fixed(fixed, D, x0, NS, T, dependence_rtol)
+
     # right-hand side
     rhs = _make_tangent_rhs!(similar(z), Js, S, s, row_order)
 
-    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, z), rhs
+    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, z, fx), rhs
 end
 
 function make_tangent_problem(z::MVector{X, N, NS},
@@ -94,7 +95,9 @@ function make_tangent_problem(z::MVector{X, N, NS},
                               J,
                               S,
                               D;
-                      row_order::Symbol=:ashtari) where {X, N, NS}
+                      row_order::Symbol=:ashtari,
+                          fixed=(),
+                dependence_rtol::Real=1e-3) where {X, N, NS}
     row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
 
     # shift
@@ -114,10 +117,13 @@ function make_tangent_problem(z::MVector{X, N, NS},
     x0 = copy(cache[1].xs[1][1])
     xT = copy(x0)
 
+    # period/shift perturbations held fixed
+    fx = _resolve_fixed(fixed, D, x0, NS, z.d[1], dependence_rtol)
+
     # right-hand side
     rhs = _make_tangent_rhs!(similar(z), Js, S, s, row_order)
 
-    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, z), rhs
+    return TangentProblemLHS{X, N, NS, row_order}(Ls, S, D, x0, xT, z, fx), rhs
 end
 
 # outer constructor without shift
@@ -126,13 +132,17 @@ make_tangent_problem(z::MVector{X, N, 1},
                      L,
                      J,
                      D;
-             row_order::Symbol=:ashtari) where {X, N} = make_tangent_problem(z,
-                                                                             store,
-                                                                             L,
-                                                                             J,
-                                                                             nothing,
-                                                                             D;
-                                                                     row_order=row_order)
+             row_order::Symbol=:ashtari,
+                 fixed=(),
+       dependence_rtol::Real=1e-3) where {X, N} = make_tangent_problem(z,
+                                                                       store,
+                                                                       L,
+                                                                       J,
+                                                                       nothing,
+                                                                       D;
+                                                                       row_order,
+                                                                       fixed,
+                                                                       dependence_rtol)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(mm::TangentProblemLHS{X}, w::MVector{X}) where {X} = mul!(similar(w), mm, w)
@@ -169,13 +179,14 @@ function LinearAlgebra.mul!(out::MVector{X, N, NS},
     end
 
     # Add the time and space derivatives at the end point shifted back,
-    # S(u(T), s) = u(0): the columns of the period and of the shifts
+    # S(u(T), s) = u(0): the columns of the period and of the shifts, except those held fixed
     for i in eachindex(D)
+        i in mm.fixed && continue
         out[ORDERING == :ashtari ? 1 : N] .+= D[i](tmp, xT).*w.d[i]
     end
 
-    # Compute phase locking constraints
-    out.d = ntuple(i -> dot(w[1], D[i](tmp, x0)), length(D))
+    # Compute phase locking constraints; the rows of the unknowns held fixed are the identity
+    out.d = ntuple(i -> i in mm.fixed ? w.d[i] : dot(w[1], D[i](tmp, x0)), length(D))
 
     return out
 end

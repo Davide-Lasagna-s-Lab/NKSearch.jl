@@ -32,6 +32,7 @@ include("search_hookstep.jl")
 include("search_lbfgs.jl")
 
 # sensitivity stuff
+include("sensitivity/fixed.jl")
 include("sensitivity/adjoint_sol_cache.jl")
 include("sensitivity/tangent_sol_cache.jl")
 
