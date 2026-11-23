@@ -120,10 +120,10 @@ function make_adjoint_problem(z::MVector{X, N, NS},
     # make copies of the propagators, one per segment (see the threading
     # note in newton.jl on why we avoid threadid()-indexed buffers)
     Ls = ntuple(i -> let Li = deepcopy(L)
-        (out) -> Li(out, store, (T - (i - 1)*T/N - 1e-12, T - i*T/N)) # subtract small amount to avoid timespan error resulting from floating point arithmetic
+        (out) -> Li(out, store, (T - (i - 1)*T/N - 1e-12, T - i*T/N + 1e-12)) # add/subtract small amount to avoid timespan error resulting from floating point arithmetic
     end, N)
     Js = ntuple(i -> let Ji = deepcopy(J)
-        (out) -> Ji(out, store, (T - (i - 1)*T/N - 1e-12, T - i*T/N))
+        (out) -> Ji(out, store, (T - (i - 1)*T/N - 1e-12, T - i*T/N + 1e-12))
     end, N)
 
     # the first point of the orbit, and its last point, u(T) = S_inv(u(0), s) on a converged orbit (no value of
