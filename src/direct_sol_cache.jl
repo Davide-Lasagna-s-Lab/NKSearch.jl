@@ -105,6 +105,15 @@ function update!(dsm::DirectSolCache,
     A[end - NS + 1:end, :] .= 0
     A[:, end - NS + 1:end] .= 0
 
+    # TODO: this bordering is singular for a travelling wave, where the time derivative
+    # D[1](x) = F(x) is parallel to the shift generator D[2](x) (F = -c ∂ₓx), and for an
+    # equilibrium, where D[1](x) = 0. The period is then arbitrary, so the δT and δs columns
+    # (right borders) and phase rows (lower borders) are linearly dependent, the Jacobian has an
+    # exact null vector, and the search may stall or take arbitrary period steps. The fix used by
+    # the sensitivity problems (the `fixed` keyword, and `degenerate_directions` in
+    # src/sensitivity/fixed.jl) applies here too: hold δT fixed by dropping its column and
+    # replacing its phase row by the identity, so that T stays at its initial value and the shift
+    # carries the wave speed.
     # lower borders
     A[end - NS + 1, _blockrng(1, n)] .= D[1](tmps[1], z0[1])
     if NS == 2

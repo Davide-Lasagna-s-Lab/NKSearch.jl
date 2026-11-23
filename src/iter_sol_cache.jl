@@ -90,6 +90,15 @@ function LinearAlgebra.mul!(out::MVector{X, N, NS},
     # shift derivative (if present) goes only on last element
     NS == 2 && (out[ORDERING == :ashtari ? 1 : N] .+= D[2](tmp[1], xT[N]).*δz.d[2])
 
+    # TODO: this bordering is singular for a travelling wave, where the time derivative
+    # D[1](x) = F(x) is parallel to the shift generator D[2](x) (F = -c ∂ₓx), and for an
+    # equilibrium, where D[1](x) = 0. The period is then arbitrary, so the δT and δs columns
+    # (above) and phase rows (below) are linearly dependent, the Jacobian has an exact null
+    # vector, and the search may stall or take arbitrary period steps. The fix used by the
+    # sensitivity problems (the `fixed` keyword, and `degenerate_directions` in
+    # src/sensitivity/fixed.jl) applies here too: hold δT fixed by dropping its column and
+    # replacing its phase row by the identity, so that T stays at its initial value and the shift
+    # carries the wave speed.
     # add phase locking constraints
     out.d = ntuple(j->dot(δz[1], D[j](tmp[1], z0[1])), NS)
 

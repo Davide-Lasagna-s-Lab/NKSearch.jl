@@ -79,6 +79,26 @@ The L-BFGS objective does not include an absolute phase penalty; see
 [L-BFGS search](lbfgs.md). Continuous spatial symmetries may also produce
 neutral directions for ordinary periodic orbits.
 
+### Travelling waves and equilibria
+
+The two constraints assume that the time direction ``f(x)`` and the shift
+generator are linearly independent. For a travelling wave, ``f(x) = -c\,\partial_x x``
+is parallel to the generator, and for an equilibrium ``f(x) = 0``. The period is
+then arbitrary (any ``T``, with shift ``s = cT``, closes the orbit), so the
+bordered operators have an exact null vector. In the sensitivity problems this
+makes GMRES stall at the right-hand side's component along that vector. The
+sensitivity itself is unaffected, because the time-averaged observable of a
+steady or steadily travelling state does not depend on ``T``.
+
+`make_tangent_problem` and [`make_adjoint_problem`](@ref) take a `fixed`
+keyword: the indices of the period and shifts whose perturbations are held at
+zero. Each one drops its bordering column and replaces its phase row by the
+identity, so the operator stays square and keeps its layout. `fixed=(1,)` holds
+the period fixed, and the shift then carries the change of the wave speed;
+`fixed=:auto` uses [`degenerate_directions`](@ref) to choose. With the default
+`fixed=()` a warning is logged when the directions are dependent. The Newton
+search operators have the same degeneracy and do not yet take `fixed`.
+
 ## The operators you provide
 
 For the Newton methods, you supply operators that act on states. Iterative

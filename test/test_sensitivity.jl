@@ -192,11 +192,13 @@ rpo_generator!(out, X) = (out .= (-X[2], X[1], 0.0, 0.0); out)
     LAc = flow(RPOAdjoint{false}(), RK4(zeros(4), Flows.DiscreteMode(true)),  TimeStepFromCache())
     JAc = flow(RPOAdjoint{true}(),  RK4(zeros(4), Flows.DiscreteMode(true)),  TimeStepFromCache())
 
+    # Holding an unknown fixed (`fixed`) must keep the two operators transposes of each other too.
     for (zq, Sf, Si) in ((z, rpo_shift, rpo_unshift), (z_off, S_off, S_inv_off)),
-        row_order in (:ashtari, :regular)
+        row_order in (:ashtari, :regular),
+        fixed in ((), (1,), (2,), (1, 2))
 
-        Atan, _ = NKSearch.make_tangent_problem(zq, cache, Lc, Jc, Sf, D; row_order=row_order)
-        Aadj, _ = make_adjoint_problem(zq, cache, LAc, JAc, Si, D, jTJ; row_order=row_order)
+        Atan, _ = NKSearch.make_tangent_problem(zq, cache, Lc, Jc, Sf, D; row_order, fixed)
+        Aadj, _ = make_adjoint_problem(zq, cache, LAc, JAc, Si, D, jTJ; row_order, fixed)
 
         # adjoint component m multiplies tangent row perm[m]; perm is an involution and perm[1] is
         # the border row r, the one the assembly shifts (N = 2 here)
@@ -224,4 +226,170 @@ rpo_generator!(out, X) = (out .= (-X[2], X[1], 0.0, 0.0); out)
             @test abs(lhs - rhs) < 1e-9*max(abs(lhs), abs(rhs))
         end
     end
+end
+
+# ------------------------------------------------------------------------- #
+# Test: sensitivity of a travelling wave and of equilibria, `fixed` keyword  #
+# ------------------------------------------------------------------------- #
+# The point (x, y) relaxes to the circle of radius R = √(1 + aμ) and turns at the rate Ω = c + κμ;
+# the pair (u, v) is a stable spiral at the origin. On the circle, with u = v = 0, the state is a
+# travelling wave under the rotation of (x, y): F(x) = Ω·(generator), so the period T is arbitrary
+# and any T with shift s = -ΩT closes the orbit. With c = κ = 0 the circle is a circle of
+# equilibria, and the origin is an equilibrium that the rotation leaves unchanged. At fixed T
+#
+#     ds/dμ = -κT ,   dx₀/dμ = (a/2R, 0, 0, 0)   (from x₀ = (R, 0, 0, 0)) ,
+#
+# and the mean of J = x² + y² is R², with derivative a.
+
+const a_tw  = 0.5
+const μ_tw  = 0.4
+const ν_tw  = -1.0
+const ω_tw  = 1.0
+
+struct TWParams
+    c::Float64
+    κ::Float64
+end
+
+function tw_rhs!(dX, X, p::TWParams)
+    x, y, u, v = X
+    g = 1 + a_tw*μ_tw - x^2 - y^2
+    Ω = p.c + p.κ*μ_tw
+    dX[1] = g*x - Ω*y
+    dX[2] = g*y + Ω*x
+    dX[3] = ν_tw*u - ω_tw*v
+    dX[4] = ν_tw*v + ω_tw*u
+    return dX
+end
+
+function tw_jacobian(X, p::TWParams)
+    x, y, u, v = X
+    g = 1 + a_tw*μ_tw - x^2 - y^2
+    Ω = p.c + p.κ*μ_tw
+    return [g - 2x^2        -2x*y - Ω   0.0    0.0;
+            -2x*y + Ω       g - 2y^2    0.0    0.0;
+            0.0             0.0         ν_tw  -ω_tw;
+            0.0             0.0         ω_tw   ν_tw]
+end
+
+struct TWSystem
+    p::TWParams
+end
+(s::TWSystem)(t, X, dX) = tw_rhs!(dX, X, s.p)
+
+# the tangent with and without the forcing ∂F/∂μ = (ax - κy, ay + κx, 0, 0), and the adjoint
+# with and without the forcing -∂J/∂X of J = x² + y²
+struct TWTangent{F}
+    p::TWParams
+end
+function (s::TWTangent{F})(t, X, V, dV) where {F}
+    mul!(dV, tw_jacobian(X, s.p), V)
+    F && (dV[1] += a_tw*X[1] - s.p.κ*X[2]; dV[2] += a_tw*X[2] + s.p.κ*X[1])
+    return dV
+end
+
+struct TWAdjoint{F}
+    p::TWParams
+end
+function (s::TWAdjoint{F})(t, X, W, dW) where {F}
+    mul!(dW, tw_jacobian(X, s.p)', W)
+    F && (dW[1] -= 2X[1]; dW[2] -= 2X[2])
+    return dW
+end
+
+@testset "sensitivity of travelling waves and equilibria" begin
+    N  = 2
+    T  = 1.3          # arbitrary: any period closes a travelling wave or an equilibrium
+    dt = 1e-3
+    R  = sqrt(1 + a_tw*μ_tw)
+
+    # degenerate_directions on the relative periodic orbit of the previous testset: independent
+    Drpo = ((out, X) -> rpo_rhs!(out, X), rpo_generator!)
+    @test degenerate_directions(Drpo, [1.0, 0.0, sqrt(μ_rpo), 0.0]) == ()
+
+    # the travelling wave (c, κ ≠ 0) and the equilibrium on the circle (c = κ = 0)
+    for (name, p) in (("travelling wave", TWParams(0.3, 0.2)), ("equilibrium", TWParams(0.0, 0.0)))
+        Ω = p.c + p.κ*μ_tw
+        s = -Ω*T
+        z = MVector(([R, 0.0, 0.0, 0.0], [R*cos(Ω*T/N), R*sin(Ω*T/N), 0.0, 0.0]), T, s)
+        D = ((out, X) -> tw_rhs!(out, X, p), rpo_generator!)
+
+        @test degenerate_directions(D, z[1]) == (1,)
+
+        G     = flow(TWSystem(p), RK4(zeros(4), Flows.NormalMode()), TimeStepConstant(dt))
+        store = RAMStorage(Vector{Float64}; storelast=false)
+        cache = ntuple(i -> RAMStageCache(4, zeros(4)), N)
+        for i = 1:N
+            G(copy(z[i]), ((i - 1)*T/N, i*T/N), store)
+            G(copy(z[i]), ((i - 1)*T/N, i*T/N), cache[i])
+        end
+        push!(store, T, G(copy(z[N]), ((N - 1)*T/N, T)))
+
+        # ---- tangent: δT = 0, ds/dμ = -κT, dx₀/dμ = (a/2R, 0, 0, 0), by both paths ----
+        for (data, mode, stepping) in ((store, Flows.ContinuousMode(false), TimeStepFromStorage(dt)),
+                                       (cache, Flows.DiscreteMode(false),   TimeStepFromCache()))
+            L = flow(TWTangent{false}(p), RK4(zeros(4), mode), stepping)
+            J = flow(TWTangent{true}(p),  RK4(zeros(4), mode), stepping)
+
+            # the default warns that the problem is singular, and holds nothing fixed
+            (A, b) = @test_logs (:warn, r"linearly dependent") NKSearch.make_tangent_problem(z, data, L, J, rpo_shift, D)
+            @test A.fixed == ()
+
+            for fixed in ((1,), :auto)
+                A, b = @test_logs NKSearch.make_tangent_problem(z, data, L, J, rpo_shift, D; fixed)
+                @test A.fixed == (1,)
+                w, res = NKSearch.gmres!(zero(b), A, b; rel_rtol=1e-12, maxiter=50, verbose=false)
+                @test res < 1e-12*norm(b)
+                @test w.d[1] == 0
+                @test abs(w.d[2] - (-p.κ*T)) < 1e-6*max(abs(p.κ*T), 1)
+                @test norm(w[1] - [a_tw/(2R), 0.0, 0.0, 0.0]) < 1e-6
+                @test abs(2*dot(z[1], w[1]) - a_tw) < 1e-6      # d⟨J⟩/dμ, since jTJ = 0
+            end
+        end
+
+        # ---- adjoint, by the store: -(1/T)∫⟨∂F/∂μ, λ⟩ dt = d⟨J⟩/dμ = a ----
+        LA = flow(TWAdjoint{false}(p), RK4(zeros(4), Flows.ContinuousMode(true)), TimeStepFromStorage(dt))
+        JA = flow(TWAdjoint{true}(p),  RK4(zeros(4), Flows.ContinuousMode(true)), TimeStepFromStorage(dt))
+        jTJ = 0.0          # J is constant along a travelling wave or an equilibrium
+
+        (A, b) = @test_logs (:warn, r"linearly dependent") make_adjoint_problem(z, store, LA, JA, rpo_unshift, D, jTJ)
+        @test A.fixed == ()
+
+        A, b = @test_logs make_adjoint_problem(z, store, LA, JA, rpo_unshift, D, jTJ; fixed=:auto)
+        @test A.fixed == (1,)
+        λ, res = NKSearch.gmres!(zero(b), A, b; rel_rtol=1e-12, maxiter=50, verbose=false)
+        @test res < 1e-12*norm(b)
+        @test λ.d[1] == 0
+
+        integral = 0.0
+        X = zeros(4)
+        for i = 1:N
+            mon = Monitor(zeros(4), (t, w) -> copy(w))
+            JA(copy(λ[i]), store, (T - (i - 1)*T/N, T - i*T/N), mon)
+            ts = times(mon)
+            fs = [(store(X, t);
+                   (a_tw*X[1] - p.κ*X[2])*samples(mon)[k][1] + (a_tw*X[2] + p.κ*X[1])*samples(mon)[k][2])
+                  for (k, t) in enumerate(ts)]
+            integral += sum(abs(ts[k + 1] - ts[k])*(fs[k] + fs[k + 1])/2 for k in 1:length(ts) - 1)
+        end
+        @test abs(-integral/T - a_tw) < 1e-5
+
+        # ---- the operators held fixed are well posed: an arbitrary right-hand side is solved ----
+        Lc = flow(TWTangent{false}(p), RK4(zeros(4), Flows.DiscreteMode(false)), TimeStepFromCache())
+        Jc = flow(TWTangent{true}(p),  RK4(zeros(4), Flows.DiscreteMode(false)), TimeStepFromCache())
+        A, _ = NKSearch.make_tangent_problem(z, cache, Lc, Jc, rpo_shift, D; fixed=(1,))
+        r = MVector(ntuple(i -> randn(4), N), randn(), randn())
+        w, res = NKSearch.gmres!(zero(r), A, r; rel_rtol=1e-12, maxiter=50, verbose=false)
+        @test res < 1e-10*norm(r)
+
+        # ---- validation of `fixed` ----
+        @test_throws ArgumentError NKSearch.make_tangent_problem(z, cache, Lc, Jc, rpo_shift, D; fixed=(3,))
+        @test_throws ArgumentError NKSearch.make_tangent_problem(z, cache, Lc, Jc, rpo_shift, D; fixed=(1, 1))
+        @test_throws ArgumentError NKSearch.make_tangent_problem(z, cache, Lc, Jc, rpo_shift, D; fixed=:none)
+    end
+
+    # an equilibrium that the rotation leaves unchanged: both directions vanish
+    p0 = TWParams(0.0, 0.0)
+    D0 = ((out, X) -> tw_rhs!(out, X, p0), rpo_generator!)
+    @test degenerate_directions(D0, zeros(4)) == (1, 2)
 end

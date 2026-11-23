@@ -38,6 +38,7 @@ load_seeds!
 
 ```@docs
 make_adjoint_problem
+degenerate_directions
 ```
 
 ## L-BFGS search overloads

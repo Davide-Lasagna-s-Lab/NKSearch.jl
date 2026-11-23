@@ -5,7 +5,7 @@
 export make_adjoint_problem
 
 # ~~~ Matrix Type ~~~
-struct AdjointProblemLHS{X, N, NS, ORDERING, LST, SIT, DT}
+struct AdjointProblemLHS{X, N, NS, ORDERING, LST, SIT, DT, FT}
         Ls::LST               # homogeneous adjoint operators (one per thread)
      S_inv::SIT               # inverse space shift operator
          D::DT                # time (and space) derivative operator
@@ -13,17 +13,19 @@ struct AdjointProblemLHS{X, N, NS, ORDERING, LST, SIT, DT}
         xT::X                 # final point, u(T) = S_inv(u(0), s) on a converged orbit
        tmp::X                 # temporary storage
          z::MVector{X, N, NS} # the periodic orbit
+     fixed::FT                # indices of the period/shift perturbations held at zero (see fixed.jl)
 
     AdjointProblemLHS{X, N, NS, ORDERING}(Ls::LST,
                                        S_inv::SIT,
                                            D::DT,
                                           x0::X,
                                           xT::X,
-                                           z::MVector{X, N, NS}) where {X, N, NS, ORDERING, LST, SIT, DT} =
-        new{X, N, NS, ORDERING, LST, SIT, DT}(Ls, S_inv, D, x0, xT, similar(z[1]), z)
+                                           z::MVector{X, N, NS},
+                                       fixed::FT) where {X, N, NS, ORDERING, LST, SIT, DT, FT} =
+        new{X, N, NS, ORDERING, LST, SIT, DT, FT}(Ls, S_inv, D, x0, xT, similar(z[1]), z, fixed)
 end
 
-function _make_adjoint_rhs(Js, S_inv, s, z::MVector{X, N, NS}, jTJ, row_order) where {X, N, NS}
+function _make_adjoint_rhs(Js, S_inv, s, z::MVector{X, N, NS}, jTJ, row_order, fixed) where {X, N, NS}
     # right hand side
     rhs = similar(z)
 
@@ -44,8 +46,11 @@ function _make_adjoint_rhs(Js, S_inv, s, z::MVector{X, N, NS}, jTJ, row_order) w
     # shift the last state back into the frame of u(T)
     NS > 1 && S_inv(rhs[row_order == :ashtari ? 1 : N], s)
 
-    # set the last bits
+    # set the last bits; the unknowns held fixed have a zero right-hand side
     vals = zeros(NS); vals[1] = jTJ
+    for i in fixed
+        vals[i] = 0
+    end
     rhs.d = tuple(vals...)
 
     return rhs
@@ -75,6 +80,25 @@ as `A * w` and usable with GMRES) together with its right-hand side `rhs`.
 - `jTJ::Real`: the cost-gradient scalar placed in the bottom rows of `rhs`.
 - `row_order::Symbol`: arrangement of rows used for the linear system, either
   `:ashtari` or `:regular`.
+- `fixed`: the indices of the period and shifts (entries of `z.d`) whose
+  perturbations are held at zero: a tuple, or `:auto` for
+  [`degenerate_directions`](@ref)`(D, x0)`. Each index drops its column and
+  replaces its bottom row by the identity (by `-1`, the transpose of the
+  tangent problem's identity row under the sign convention of the scalar
+  unknowns). With the default `()` nothing is held fixed, and a warning is
+  logged if the directions of `D` are linearly dependent at the start of the
+  orbit. See the note below.
+- `dependence_rtol::Real = 1e-3`: the tolerance passed to
+  [`degenerate_directions`](@ref).
+
+!!! note "Travelling waves and equilibria"
+    For a travelling wave the time derivative `D[1](x0)` is parallel to the
+    shift generator, and for an equilibrium it vanishes. The period is then
+    arbitrary, the bordered operator has an exact null vector, and GMRES
+    stalls at the right-hand side's component along it. Pass `fixed=(1,)`
+    (or `fixed=:auto`) to hold the period fixed; the shift then carries the
+    change of the wave speed. For a state also invariant under the shift,
+    `fixed=(1, 2)`.
 
 !!! note "`S_inv` is the inverse shift, not the forward one"
     Transposing the shifted wrap-around row of the tangent problem calls for
@@ -110,7 +134,9 @@ function make_adjoint_problem(z::MVector{X, N, NS},
                           S_inv,
                               D,
                             jTJ::Real;
-                      row_order::Symbol=:ashtari) where {X, N, NS}
+                      row_order::Symbol=:ashtari,
+                          fixed=(),
+                dependence_rtol::Real=1e-3) where {X, N, NS}
     row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
 
     # period and shift
@@ -131,10 +157,13 @@ function make_adjoint_problem(z::MVector{X, N, NS},
     x0 = store(similar(z[1]), 0, Val(0))
     xT = NS > 1 ? S_inv(copy(x0), s) : copy(x0)
 
-    # right-hand side
-    rhs = _make_adjoint_rhs(Js, S_inv, s, z, jTJ, row_order)
+    # period/shift perturbations held fixed
+    fx = _resolve_fixed(fixed, D, x0, NS, T, dependence_rtol)
 
-    return AdjointProblemLHS{X, N, NS, row_order}(Ls, S_inv, D, x0, xT, z), rhs
+    # right-hand side
+    rhs = _make_adjoint_rhs(Js, S_inv, s, z, jTJ, row_order, fx)
+
+    return AdjointProblemLHS{X, N, NS, row_order}(Ls, S_inv, D, x0, xT, z, fx), rhs
 end
 
 function make_adjoint_problem(z::MVector{X, N, NS},
@@ -144,7 +173,9 @@ function make_adjoint_problem(z::MVector{X, N, NS},
                           S_inv,
                               D,
                             jTJ::Real;
-                      row_order::Symbol=:ashtari) where {X, N, NS}
+                      row_order::Symbol=:ashtari,
+                          fixed=(),
+                dependence_rtol::Real=1e-3) where {X, N, NS}
     row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
 
     # shift
@@ -163,10 +194,13 @@ function make_adjoint_problem(z::MVector{X, N, NS},
     x0 = copy(store[1].xs[1][1])
     xT = NS > 1 ? S_inv(copy(x0), s) : copy(x0)
 
-    # right-hand side
-    rhs = _make_adjoint_rhs(Js, S_inv, s, z, jTJ, row_order)
+    # period/shift perturbations held fixed
+    fx = _resolve_fixed(fixed, D, x0, NS, z.d[1], dependence_rtol)
 
-    return AdjointProblemLHS{X, N, NS, row_order}(Ls, S_inv, D, x0, xT, z), rhs
+    # right-hand side
+    rhs = _make_adjoint_rhs(Js, S_inv, s, z, jTJ, row_order, fx)
+
+    return AdjointProblemLHS{X, N, NS, row_order}(Ls, S_inv, D, x0, xT, z, fx), rhs
 end
 
 # outer constructor without shift
@@ -176,14 +210,18 @@ make_adjoint_problem(z::MVector{X, N, 1},
                      J,
                      D,
                      jTJ;
-             row_order::Symbol=:ashtari) where {X, N} = make_adjoint_problem(z,
-                                                                             store,
-                                                                             L,
-                                                                             J,
-                                                                             nothing,
-                                                                             D,
-                                                                             jTJ;
-                                                                       row_order=row_order)
+             row_order::Symbol=:ashtari,
+                 fixed=(),
+       dependence_rtol::Real=1e-3) where {X, N} = make_adjoint_problem(z,
+                                                                       store,
+                                                                       L,
+                                                                       J,
+                                                                       nothing,
+                                                                       D,
+                                                                       jTJ;
+                                                                       row_order,
+                                                                       fixed,
+                                                                       dependence_rtol)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(A::AdjointProblemLHS{X}, w::MVector{X}) where {X} = LinearAlgebra.mul!(similar(w), A, w)
@@ -219,17 +257,19 @@ function LinearAlgebra.mul!(out::MVector{X, N, NS},
         end
     end
 
-    # right columns
+    # right columns, except those of the unknowns held fixed
     if NS > 1
         for i in eachindex(D)
+            i in mm.fixed && continue
             out[ORDERING == :ashtari ? 1 : N] .-= S_inv(D[i](tmp, x0), s).*w.d[i]
         end
-    else
+    elseif !(1 in mm.fixed)
         out[ORDERING == :ashtari ? 1 : N] .-= D[1](tmp, x0).*w.d[1]
     end
 
-    # bottom rows
-    out.d = ntuple(i -> dot(w[1], D[i](tmp, xT)), length(D))
+    # bottom rows. The scalar unknowns are the negated multipliers of the tangent rows (the sign
+    # of the `-=` above), so the transpose of an identity row of the tangent problem is -1
+    out.d = ntuple(i -> i in mm.fixed ? -w.d[i] : dot(w[1], D[i](tmp, xT)), length(D))
 
     return out
 end
