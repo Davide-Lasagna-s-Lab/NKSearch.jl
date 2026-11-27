@@ -228,6 +228,59 @@ rpo_generator!(out, X) = (out .= (-X[2], X[1], 0.0, 0.0); out)
     end
 end
 
+@testset "tangent problem of a segment that does not close" begin
+    # A segment of the system above started off the orbit, at radius 1.05 in the (x, y) plane, so that its end
+    # point, shifted back, differs from its start. With `xT` the period and shift columns of the closing row are
+    # evaluated there, as in the periodic shadowing of a finite segment of a chaotic trajectory.
+    Ω  = ω_rpo + β_rpo*μ_rpo
+    T  = 2π/Ω
+    s  = -(c_rpo + κ_rpo*μ_rpo)*T
+    N  = 2
+    D  = ((out, X) -> rpo_rhs!(out, X), rpo_generator!)
+    G  = flow(RPOSystem(), RK4(zeros(4), Flows.NormalMode()), TimeStepConstant(1e-3))
+    Lc = flow(RPOTangent{false}(), RK4(zeros(4), Flows.DiscreteMode(false)), TimeStepFromCache())
+    Jc = flow(RPOTangent{true}(),  RK4(zeros(4), Flows.DiscreteMode(false)), TimeStepFromCache())
+
+    # the segment, its seeds from one march, its stage caches and its end point shifted back
+    x0    = [1.05, 0.0, sqrt(μ_rpo), 0.0]
+    seeds = (copy(x0), G(copy(x0), (0, T/N)))
+    cache = ntuple(i -> RAMStageCache(4, zeros(4)), N)
+    for i = 1:N
+        G(copy(seeds[i]), ((i - 1)*T/N, i*T/N), cache[i])
+    end
+    xT = rpo_shift(G(copy(seeds[N]), ((N - 1)*T/N, T)), s)
+    @test norm(xT - x0) > 1e-2
+    z  = MVector(copy.(seeds), T, s)
+
+    for row_order in (:ashtari, :regular)
+        r = row_order == :ashtari ? 1 : N   # the closing row
+
+        # `xT = x0` reproduces the default exactly
+        A0, b0 = NKSearch.make_tangent_problem(z, cache, Lc, Jc, rpo_shift, D; row_order)
+        A1, b1 = NKSearch.make_tangent_problem(z, cache, Lc, Jc, rpo_shift, D; row_order, xT=copy(x0))
+        w = MVector(ntuple(i -> randn(4), N), randn(), randn())
+        u0, u1 = A0*w, A1*w
+        @test all(u0[i] == u1[i] for i in 1:N) && u0.d == u1.d
+        @test all(b0[i] == b1[i] for i in 1:N) && b0.d == b1.d
+
+        # the period and shift columns of the closing row are F(xT) and the generator at xT
+        A, b = NKSearch.make_tangent_problem(z, cache, Lc, Jc, rpo_shift, D; row_order, xT)
+        e = ntuple(i -> MVector(ntuple(_ -> zeros(4), N), Float64(i == 1), Float64(i == 2)), 2)
+        @test (A*e[1])[r] ≈ rpo_rhs!(zeros(4), xT)       rtol=1e-14
+        @test (A*e[2])[r] ≈ rpo_generator!(zeros(4), xT) rtol=1e-14
+
+        # the solution is a perturbation that, with δT and δs, closes the segment:
+        # S(v(T), s) + δT·F(xT) + δs·∂S(xT) = v(0), with v(T) from the last seed perturbation
+        v, res = NKSearch.gmres!(zero(b), A, b; rel_rtol=1e-12, maxiter=50, verbose=false)
+        v0 = v[1]
+        vN = v[N]
+        vT = rpo_shift(Jc(copy(vN), cache[N]), s)
+        closure = vT .+ v.d[1].*rpo_rhs!(zeros(4), xT) .+ v.d[2].*rpo_generator!(zeros(4), xT) .- v0
+        @test norm(closure) < 1e-9*norm(v0)
+    end
+end
+
+
 # ------------------------------------------------------------------------- #
 # Test: sensitivity of a travelling wave and of equilibria, `fixed` keyword  #
 # ------------------------------------------------------------------------- #

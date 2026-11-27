@@ -99,6 +99,14 @@ the period fixed, and the shift then carries the change of the wave speed;
 `fixed=()` a warning is logged when the directions are dependent. The Newton
 search operators have the same degeneracy and do not yet take `fixed`.
 
+`make_tangent_problem` also takes an `xT` keyword, the end point of the
+trajectory mapped back by the shift, ``S(x(T), s)``. The period and shift columns
+of the closing row are evaluated there, so that row imposes
+``S(v(T), s) + \delta T\, f(x_T) + \delta s\, \partial_s S(x_T) = v(0)``. On a
+closed orbit ``x_T = x(0)``, which is the default. Passing the end point of a
+segment that does not close gives the periodic shadowing problem of a finite
+segment of a chaotic trajectory.
+
 ## The operators you provide
 
 For the Newton methods, you supply operators that act on states. Iterative

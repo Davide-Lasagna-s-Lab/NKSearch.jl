@@ -47,6 +47,17 @@ function _make_tangent_rhs!(rhs::MVector{X, N, NS}, Js, S, s, row_order) where {
     return rhs
 end
 
+# The end point S(u(T), s) at which the period and shift columns of the closing row are evaluated: `x0` on a
+# closed orbit, or a given `xT` for a trajectory segment that does not close, as in the periodic shadowing of a
+# finite segment of a chaotic trajectory. There the closing row imposes S(v(T), s) + δT·F(xT) + δs·∂S(xT) = v(0),
+# with xT = S(u(T), s), the end point of the segment mapped back by the shift.
+function _tangent_end_point(x0, xT)
+    xT === nothing && return copy(x0)
+    size(xT) == size(x0) ||
+        throw(DimensionMismatch("the end point `xT` has size $(size(xT)), the orbit's states have size $(size(x0))"))
+    return copy(xT)
+end
+
 # Main outer constructor. For a relative periodic orbit the store must not be built with a `period`: its
 # wrap-around assumes u(t + T) = u(t), whereas u(0) = S(u(T), s), so that the base flow near t = 0 and t = T would
 # mix the two frames. Fill it segment by segment with `storelast=false` and push the end point u(T), or use the
@@ -59,7 +70,8 @@ function make_tangent_problem(z::MVector{X, N, NS},
                               D;
                       row_order::Symbol=:ashtari,
                           fixed=(),
-                dependence_rtol::Real=1e-3) where {X, N, NS}
+                dependence_rtol::Real=1e-3,
+                             xT=nothing) where {X, N, NS}
     row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
 
     # period and shift
@@ -78,7 +90,7 @@ function make_tangent_problem(z::MVector{X, N, NS},
     # the first point of the orbit, and its last point shifted back, S(u(T), s), which on a converged orbit is the
     # first point itself (no value of the store at T is needed)
     x0 = store(similar(z[1]), 0, Val(0))
-    xT = copy(x0)
+    xT = _tangent_end_point(x0, xT)
 
     # period/shift perturbations held fixed
     fx = _resolve_fixed(fixed, D, x0, NS, T, dependence_rtol)
@@ -97,7 +109,8 @@ function make_tangent_problem(z::MVector{X, N, NS},
                               D;
                       row_order::Symbol=:ashtari,
                           fixed=(),
-                dependence_rtol::Real=1e-3) where {X, N, NS}
+                dependence_rtol::Real=1e-3,
+                             xT=nothing) where {X, N, NS}
     row_order ∈ (:ashtari, :regular) || throw(ArgumentError("invalid argument: `row_order`, only values `:ashtari` or `:regular` are permitted"))
 
     # shift
@@ -115,7 +128,7 @@ function make_tangent_problem(z::MVector{X, N, NS},
     # the first point of the orbit, and its last point shifted back, S(u(T), s), which on a converged orbit is the
     # first point itself
     x0 = copy(cache[1].xs[1][1])
-    xT = copy(x0)
+    xT = _tangent_end_point(x0, xT)
 
     # period/shift perturbations held fixed
     fx = _resolve_fixed(fixed, D, x0, NS, z.d[1], dependence_rtol)
@@ -134,7 +147,8 @@ make_tangent_problem(z::MVector{X, N, 1},
                      D;
              row_order::Symbol=:ashtari,
                  fixed=(),
-       dependence_rtol::Real=1e-3) where {X, N} = make_tangent_problem(z,
+       dependence_rtol::Real=1e-3,
+                    xT=nothing) where {X, N} = make_tangent_problem(z,
                                                                        store,
                                                                        L,
                                                                        J,
@@ -142,7 +156,8 @@ make_tangent_problem(z::MVector{X, N, 1},
                                                                        D;
                                                                        row_order,
                                                                        fixed,
-                                                                       dependence_rtol)
+                                                                       dependence_rtol,
+                                                                       xT)
 
 # Main interface is matrix-vector product exposed to the Krylov solver
 Base.:*(mm::TangentProblemLHS{X}, w::MVector{X}) where {X} = mul!(similar(w), mm, w)
